@@ -1,0 +1,27 @@
+name: Feature or provider request
+description: Ask for a new provider, or for the app to do something it does not.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like
+    validations:
+      required: true
+  - type: textarea
+    id: endpoint
+    attributes:
+      label: For a new provider, where does the usage come from
+      description: |
+        UsageMeter only reads documented or officially exposed endpoints, and it
+        never signs in on your behalf or imports browser cookies. If the service
+        publishes usage only to its own web app, Custom JSON is the answer rather
+        than a built-in connector.
+      placeholder: |
+        Endpoint: GET https://api.example.com/v1/usage
+        Credential: the CLI writes ~/.example/auth.json
+        Response shape (redacted): {"usage": {"used": 10, "limit": 100}}
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters

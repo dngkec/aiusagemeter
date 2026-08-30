@@ -1,0 +1,19 @@
+# Build output
+.build/
+dist/
+.swiftpm/
+*.xcresult
+UsageMeter.xcworkspace/
+
+# macOS
+.DS_Store
+
+# Kept out of the published repository. Package.swift only declares the test
+# target when Tests/ is actually present, so a fresh clone still builds and
+# packages; the suite stays runnable in a working copy that has it.
+Tests/
+TEST_REPORT.md
+
+# Source artwork and captures nothing in the app or the README uses.
+Resources/icons/UsageMeter.svg
+docs/usagemeter-settings.png

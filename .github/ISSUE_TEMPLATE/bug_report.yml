@@ -1,0 +1,60 @@
+name: Bug report
+description: A reading is wrong, a provider will not connect, or the overlay misbehaves.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not paste API keys, tokens, or a raw provider response. A
+        redacted shape (`{"usage": {"percent": 42}}`) is what helps.
+  - type: input
+    id: version
+    attributes:
+      label: UsageMeter version
+      description: Settings → About & Support, or the name of the disk image you installed.
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.6"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Which provider
+      description: Leave blank if this is not about one provider.
+      options:
+        - Not provider-specific
+        - Claude Code
+        - Codex / ChatGPT
+        - Cursor
+        - GitHub Copilot
+        - Gemini Code Assist
+        - Grok / xAI
+        - Kimi Code
+        - JetBrains AI
+        - An API provider (Anthropic, OpenAI, OpenRouter, DeepSeek, Mistral, Moonshot, z.ai, OpenCode, Warp, xAI Platform)
+        - Custom JSON or Manual budget
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings
+        2. …
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Display setup, whether the provider's own dashboard agrees, a screenshot of the notch.

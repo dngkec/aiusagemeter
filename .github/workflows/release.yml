@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish the disk image
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Package the disk image
+        run: ./scripts/make-dmg.sh --no-build
+
+      - name: Checksum
+        run: |
+          cd dist
+          shasum -a 256 *.dmg | tee SHA256SUMS.txt
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          body: |
+            UsageMeter is ad-hoc signed rather than notarised, so the first launch
+            needs Finder: right-click **UsageMeter.app** and choose **Open**, then
+            confirm. Everything after that opens normally.
+
+            If you find UsageMeter useful, you can
+            [buy me a coffee](https://buymeacoffee.com/dngkec).
+            Interface design by [@hivinz_](https://x.com/hivinz_).

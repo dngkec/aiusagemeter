@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test and package
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain
+        run: swift --version
+
+      # The test suite is not published, so there is no `swift test` step here.
+      # `Package.swift` declares the test target only when `Tests/` is present.
+      - name: Build
+        run: swift build -c release
+
+      - name: Build the app bundle
+        run: ./scripts/build-app.sh
+
+      # Finder automation is not available to a CI runner, so the image comes
+      # out correct but unarranged. That is expected and is not a failure.
+      - name: Package the disk image
+        run: ./scripts/make-dmg.sh --no-build
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: UsageMeter-dmg
+          path: dist/*.dmg
+          if-no-files-found: error
