@@ -1,4 +1,5 @@
 import AIUsageMeterCore
+import CoreGraphics
 import SwiftUI
 
 enum ProviderGlyph {
@@ -106,8 +107,8 @@ struct BurstShape: Shape {
         var path = Path()
         for index in 0..<rays {
             let angle = Double(index) / Double(rays) * 2 * .pi
-            let along = CGVector(dx: cos(angle), dy: sin(angle))
-            let across = CGVector(dx: -sin(angle), dy: cos(angle))
+            let along = CGVector(dx: CoreGraphics.cos(angle), dy: CoreGraphics.sin(angle))
+            let across = CGVector(dx: -CoreGraphics.sin(angle), dy: CoreGraphics.cos(angle))
             func point(_ radial: CGFloat, _ lateral: CGFloat) -> CGPoint {
                 CGPoint(x: centre.x + radial * along.dx + lateral * across.dx,
                         y: centre.y + radial * along.dy + lateral * across.dy)
@@ -132,7 +133,8 @@ struct KnotShape: Shape {
         var path = Path()
         for index in 0..<6 {
             let angle = Double(index) / 6 * 2 * .pi - .pi / 2
-            let origin = CGPoint(x: centre.x + offset * cos(angle), y: centre.y + offset * sin(angle))
+            let origin = CGPoint(x: centre.x + offset * CoreGraphics.cos(angle),
+                                 y: centre.y + offset * CoreGraphics.sin(angle))
             path.addArc(center: origin, radius: lobe,
                         startAngle: .radians(angle - .pi / 2), endAngle: .radians(angle + .pi / 2),
                         clockwise: false)
@@ -142,7 +144,8 @@ struct KnotShape: Shape {
         let core = radius * 0.40
         for index in 0..<6 {
             let angle = Double(index) / 6 * 2 * .pi - .pi / 3
-            let point = CGPoint(x: centre.x + core * cos(angle), y: centre.y + core * sin(angle))
+            let point = CGPoint(x: centre.x + core * CoreGraphics.cos(angle),
+                                y: centre.y + core * CoreGraphics.sin(angle))
             if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
         path.closeSubpath()
