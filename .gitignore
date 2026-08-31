@@ -14,6 +14,77 @@ AIUsageMeter.xcworkspace/
 Tests/
 TEST_REPORT.md
 
-# Source artwork and captures nothing in the app or the README uses.
+# Source artwork that neither the app nor the README uses.
 Resources/icons/AIUsageMeter.svg
-docs/aiusagemeter-settings.png
+
+# Local AI-agent configuration and instructions. These files may contain
+# machine-specific context and must not become part of the product repository.
+.agents/
+.aider/
+.claude/
+.cline/
+.codex/
+.continue/
+.cursor/
+.gemini/
+.github/instructions/
+.roo/
+.windsurf/
+*[Aa][Gg][Ee][Nn][Tt]*.[Mm][Dd]
+*[Aa][Ii][Dd][Ee][Rr]*.[Mm][Dd]
+*[Cc][Ll][Aa][Uu][Dd][Ee]*.[Mm][Dd]
+*[Cc][Ll][Ii][Nn][Ee]*.[Mm][Dd]
+*[Cc][Oo][Dd][Ee][Xx]*.[Mm][Dd]
+*[Cc][Oo][Pp][Ii][Ll][Oo][Tt]*.[Mm][Dd]
+*[Cc][Uu][Rr][Ss][Oo][Rr]*.[Mm][Dd]
+*[Gg][Ee][Mm][Ii][Nn][Ii]*.[Mm][Dd]
+*[Jj][Uu][Ll][Ee][Ss]*.[Mm][Dd]
+*[Qq][Ww][Ee][Nn]*.[Mm][Dd]
+*[Ww][Ii][Nn][Dd][Ss][Uu][Rr][Ff]*.[Mm][Dd]
+
+# Internal engineering documents. Product/public documentation (README,
+# SECURITY, CONTRIBUTING, release notes, and user docs) remains trackable.
+/[Aa][Dd][Rr]/
+/[Aa][Dd][Rr][Ss]/
+/[Aa][Rr][Cc][Hh][Ii][Tt][Ee][Cc][Tt][Uu][Rr][Ee]/
+/[Dd][Ee][Ss][Ii][Gg][Nn]/
+/[Dd][Ee][Ss][Ii][Gg][Nn][Ss]/
+/[Dd][Ee][Cc][Ii][Ss][Ii][Oo][Nn][Ss]/
+/[Ii][Nn][Tt][Ee][Rr][Nn][Aa][Ll]-[Dd][Oo][Cc][Ss]/
+/[Nn][Oo][Tt][Ee][Ss]/
+/[Pp][Ll][Aa][Nn][Nn][Ii][Nn][Gg]/
+/[Pp][Ll][Aa][Nn][Ss]/
+/[Pp][Rr][Oo][Pp][Oo][Ss][Aa][Ll][Ss]/
+/[Tt][Ee][Ss][Tt]-[Pp][Ll][Aa][Nn][Ss]/
+/[Tt][Ee][Ss][Tt]_[Pp][Ll][Aa][Nn][Ss]/
+/docs/[Aa][Dd][Rr]/
+/docs/[Aa][Dd][Rr][Ss]/
+/docs/[Aa][Rr][Cc][Hh][Ii][Tt][Ee][Cc][Tt][Uu][Rr][Ee]/
+/docs/[Dd][Ee][Ss][Ii][Gg][Nn]/
+/docs/[Dd][Ee][Ss][Ii][Gg][Nn][Ss]/
+/docs/[Dd][Ee][Cc][Ii][Ss][Ii][Oo][Nn][Ss]/
+/docs/[Ii][Nn][Tt][Ee][Rr][Nn][Aa][Ll]/
+/docs/[Nn][Oo][Tt][Ee][Ss]/
+/docs/[Pp][Ll][Aa][Nn][Nn][Ii][Nn][Gg]/
+/docs/[Pp][Ll][Aa][Nn][Ss]/
+/docs/[Pp][Rr][Oo][Pp][Oo][Ss][Aa][Ll][Ss]/
+/docs/[Tt][Ee][Ss][Tt]-[Pp][Ll][Aa][Nn][Ss]/
+/docs/[Tt][Ee][Ss][Tt]_[Pp][Ll][Aa][Nn][Ss]/
+
+# Common standalone internal-document names, at any directory depth.
+[Aa][Dd][Rr].[Mm][Dd]
+[Aa][Dd][Rr]-*.[Mm][Dd]
+[Aa][Dd][Rr]_*.[Mm][Dd]
+*[Aa][Rr][Cc][Hh][Ii][Tt][Ee][Cc][Tt][Uu][Rr][Ee]*.[Mm][Dd]
+*[Dd][Ee][Ss][Ii][Gg][Nn]*.[Mm][Dd]
+[Pp][Ll][Aa][Nn].[Mm][Dd]
+[Pp][Ll][Aa][Nn][Ss].[Mm][Dd]
+[Pp][Ll][Aa][Nn]-*.[Mm][Dd]
+[Pp][Ll][Aa][Nn]_*.[Mm][Dd]
+*-plan.[Mm][Dd]
+*-plan-*.[Mm][Dd]
+*_plan.[Mm][Dd]
+*_plan_*.[Mm][Dd]
+*[Tt][Ee][Ss][Tt]*[Pp][Ll][Aa][Nn]*.[Mm][Dd]
+*[Tt][Ee][Ss][Tt]*[Rr][Ee][Pp][Oo][Rr][Tt]*.[Mm][Dd]
+*[Ii][Mm][Pp][Ll][Ee][Mm][Ee][Nn][Tt][Aa][Tt][Ii][Oo][Nn]*[Ss][Tt][Aa][Tt][Uu][Ss]*.[Mm][Dd]
