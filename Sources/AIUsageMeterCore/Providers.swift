@@ -6,8 +6,6 @@ public struct ProviderContext: Sendable {
     public let files: LocalFiles
     public let secrets: SecretStore
     public let external: ExternalCredentials
-    /// `external` defaults to the store that reads nothing: only the running app
-    /// asks for another application's keychain item, and it does so explicitly.
     public init(http: HTTPClient, files: LocalFiles, secrets: SecretStore, external: ExternalCredentials = NoExternalCredentials()) {
         self.http = http; self.files = files; self.secrets = secrets; self.external = external
     }
@@ -71,7 +69,7 @@ public struct GenericProviderAdapter: ProviderAdapter {
         case .openCode: return try await openCode(context)
         case .warp: return try await warp(context)
         case .jetBrainsAI: return try jetBrains(context)
-        default: throw UsageMeterError.setupNeeded("No safe built-in usage endpoint is available. Choose Custom JSON or Manual Budget.")
+        default: throw AIUsageMeterError.setupNeeded("No safe built-in usage endpoint is available. Choose Custom JSON or Manual Budget.")
         }
     }
 
@@ -85,13 +83,11 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func anthropicCost(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("anthropic.adminKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add an Anthropic Admin key in Settings.") }
+        guard let key = try context.secrets.read("anthropic.adminKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add an Anthropic Admin key in Settings.") }
         let calendar = Calendar(identifier: .gregorian)
         let start = calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!
         let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]
         var components = URLComponents(string: "https://api.anthropic.com/v1/organizations/cost_report")!
-        // Daily buckets are the only granularity, and 31 is both the maximum
-        // page size and the longest month, so one page always spans the month.
         components.queryItems = [
             URLQueryItem(name: "starting_at", value: f.string(from: start)),
             URLQueryItem(name: "ending_at", value: f.string(from: Date())),
@@ -117,7 +113,6 @@ public struct GenericProviderAdapter: ProviderAdapter {
     private func grok(_ context: ProviderContext) async throws -> ProviderSnapshot {
         let root = try CredentialResolver.jsonFile(".grok/auth.json", files: context.files)
         let token = try CredentialResolver.grokToken(root)
-        // The CLI proxy identifies its caller by this header, not by client mode.
         let headers = ["x-xai-token-auth": "xai-grok-cli"]
         let base = URL(string: "https://cli-chat-proxy.grok.com/v1/billing")!
         let credits = URL(string: "https://cli-chat-proxy.grok.com/v1/billing?format=credits")!
@@ -137,8 +132,6 @@ public struct GenericProviderAdapter: ProviderAdapter {
             let (data, _) = try await context.http.data(for: request, maximumBytes: 2_000_000)
             return ProviderSnapshot(id: id, windows: try UsageParsers.cursor(data), dashboardURL: dashboard)
         } catch {
-            // The request-count endpoint is scoped to a user id, so it is only
-            // reachable after the account lookup; it predates usage-summary.
             let me = RequestFactory.request(url: URL(string: "https://cursor.com/api/auth/me")!, bearer: token)
             guard let identity = try? await context.http.data(for: me, maximumBytes: 1_000_000).0,
                   let account = try? JSONValue.decode(identity),
@@ -162,7 +155,7 @@ public struct GenericProviderAdapter: ProviderAdapter {
     private func gemini(_ context: ProviderContext) async throws -> ProviderSnapshot {
         let creds = try CredentialResolver.jsonFile(".gemini/oauth_creds.json", files: context.files)
         let token = try CredentialResolver.token(from: creds, paths: ["access_token"])
-        if let expiry = JSONPicking.date(creds, ["expiry_date", "expires_at"]), expiry <= Date() { throw UsageMeterError.expiredCredential("Gemini’s saved token expired. Reopen Gemini CLI to sign in again.") }
+        if let expiry = JSONPicking.date(creds, ["expiry_date", "expires_at"]), expiry <= Date() { throw AIUsageMeterError.expiredCredential("Gemini’s saved token expired. Reopen Gemini CLI to sign in again.") }
         let base = "https://cloudcode-pa.googleapis.com/v1internal:"
         var load = RequestFactory.request(url: URL(string: base + "loadCodeAssist")!, method: .post, bearer: token)
         load.httpBody = try JSONSerialization.data(withJSONObject: ["metadata": ["ideType": "GEMINI_CLI", "pluginType": "GEMINI"]])
@@ -170,8 +163,6 @@ public struct GenericProviderAdapter: ProviderAdapter {
         let loadRoot = try JSONValue.decode(loadData)
         try CredentialResolver.rejectIneligibleCodeAssistTier(loadRoot)
         var quota = RequestFactory.request(url: URL(string: base + "retrieveUserQuota")!, method: .post, bearer: token)
-        // The project is a filter, not a requirement: an account whose tier does
-        // not carry one still has quota to report.
         let project = loadRoot.value(at: "cloudaicompanionProject")?.string
         quota.httpBody = try JSONSerialization.data(withJSONObject: project.map { ["project": $0] } ?? [:])
         let (data, _) = try await context.http.data(for: quota, maximumBytes: 2_000_000)
@@ -179,7 +170,7 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func openAICost(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("openai.adminKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add an OpenAI Admin key in Settings.") }
+        guard let key = try context.secrets.read("openai.adminKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add an OpenAI Admin key in Settings.") }
         let calendar = Calendar(identifier: .gregorian)
         let start = calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!
         var components = URLComponents(string: "https://api.openai.com/v1/organization/costs")!
@@ -190,7 +181,7 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func openRouter(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("openrouter.apiKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add an OpenRouter API key in Settings.") }
+        guard let key = try context.secrets.read("openrouter.apiKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add an OpenRouter API key in Settings.") }
         async let creditsCall = fetchResult(RequestFactory.request(url: URL(string: "https://openrouter.ai/api/v1/credits")!, bearer: key), context)
         async let keyCall = fetchResult(RequestFactory.request(url: URL(string: "https://openrouter.ai/api/v1/key")!, bearer: key), context)
         let (creditsResult, keyResult) = await (creditsCall, keyCall)
@@ -200,14 +191,14 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func deepSeek(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("deepseek.apiKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add a DeepSeek API key in Settings.") }
+        guard let key = try context.secrets.read("deepseek.apiKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add a DeepSeek API key in Settings.") }
         let request = RequestFactory.request(url: URL(string: "https://api.deepseek.com/user/balance")!, bearer: key)
         let (data, _) = try await context.http.data(for: request, maximumBytes: 1_000_000)
         return ProviderSnapshot(id: id, windows: try UsageParsers.deepSeek(data, monthlyBudget: max(0.01, configuration.monthlyBudget)), dashboardURL: URL(string: "https://platform.deepseek.com/usage"))
     }
 
     private func mistral(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("mistral.adminKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add a Mistral Admin key in Settings.") }
+        guard let key = try context.secrets.read("mistral.adminKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add a Mistral Admin key in Settings.") }
         let request = RequestFactory.request(url: URL(string: "https://api.mistral.ai/v1/admin/spend-limit")!, headers: ["x-api-key": key])
         let (data, _) = try await context.http.data(for: request, maximumBytes: 1_000_000)
         return ProviderSnapshot(id: id, windows: try UsageParsers.mistral(spendLimit: data, monthlyBudget: max(0.01, configuration.monthlyBudget)), dashboardURL: URL(string: "https://admin.mistral.ai/organization/usage"))
@@ -216,21 +207,19 @@ public struct GenericProviderAdapter: ProviderAdapter {
     private func kimi(_ context: ProviderContext) async throws -> ProviderSnapshot {
         let creds = try CredentialResolver.jsonFile(".kimi-code/credentials/kimi-code.json", files: context.files)
         let token = try CredentialResolver.token(from: creds, paths: ["access_token"])
-        if let expiry = JSONPicking.date(creds, ["expires_at"]), expiry <= Date() { throw UsageMeterError.expiredCredential("Kimi Code’s saved token expired. Reopen Kimi Code to sign in again.") }
+        if let expiry = JSONPicking.date(creds, ["expires_at"]), expiry <= Date() { throw AIUsageMeterError.expiredCredential("Kimi Code’s saved token expired. Reopen Kimi Code to sign in again.") }
         let request = RequestFactory.request(url: URL(string: "https://api.kimi.com/coding/v1/usages")!, bearer: token)
         let (data, _) = try await context.http.data(for: request, maximumBytes: 2_000_000)
         return ProviderSnapshot(id: id, windows: try UsageParsers.kimi(data), dashboardURL: URL(string: "https://www.kimi.com/code"))
     }
 
     private func xaiPlatform(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("xai.managementKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add an xAI Management key in Settings. Inference keys are not accepted.") }
+        guard let key = try context.secrets.read("xai.managementKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add an xAI Management key in Settings. Inference keys are not accepted.") }
         let team = configuration.workspaceID.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The team goes into the path, so it is checked against an ASCII set
-        // rather than escaped: anything else is a typo, not an identifier.
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
         guard !team.isEmpty, team.unicodeScalars.allSatisfy(allowed.contains),
               let url = URL(string: "https://management-api.x.ai/v1/billing/teams/\(team)/prepaid/balance") else {
-            throw UsageMeterError.setupNeeded("Add your xAI team ID in Settings. It appears in the console URL.")
+            throw AIUsageMeterError.setupNeeded("Add your xAI team ID in Settings. It appears in the console URL.")
         }
         let request = RequestFactory.request(url: url, bearer: key)
         let (data, _) = try await context.http.data(for: request, maximumBytes: 2_000_000)
@@ -238,7 +227,7 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func moonshot(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("moonshot.apiKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add a Moonshot API key in Settings.") }
+        guard let key = try context.secrets.read("moonshot.apiKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add a Moonshot API key in Settings.") }
         let china = configuration.region == .china
         let host = china ? "https://api.moonshot.cn" : "https://api.moonshot.ai"
         let request = RequestFactory.request(url: URL(string: host + "/v1/users/me/balance")!, bearer: key)
@@ -248,7 +237,7 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func zai(_ configuration: ProviderConfiguration, _ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("zai.apiKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add a z.ai or BigModel API key in Settings.") }
+        guard let key = try context.secrets.read("zai.apiKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add a z.ai or BigModel API key in Settings.") }
         let china = configuration.region == .china
         let host = china ? "https://open.bigmodel.cn" : "https://api.z.ai"
         let request = RequestFactory.request(url: URL(string: host + "/api/monitor/usage/quota/limit")!, bearer: key)
@@ -258,14 +247,14 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func openCode(_ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("opencode.apiKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add an OpenCode API key in Settings.") }
+        guard let key = try context.secrets.read("opencode.apiKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add an OpenCode API key in Settings.") }
         let request = RequestFactory.request(url: URL(string: "https://opencode.ai/zen/go/v1/usage")!, bearer: key)
         let (data, _) = try await context.http.data(for: request, maximumBytes: 2_000_000)
         return ProviderSnapshot(id: id, windows: try UsageParsers.openCodeZen(data), dashboardURL: URL(string: "https://opencode.ai"))
     }
 
     private func warp(_ context: ProviderContext) async throws -> ProviderSnapshot {
-        guard let key = try context.secrets.read("warp.apiKey"), !key.isEmpty else { throw UsageMeterError.setupNeeded("Add a Warp API key in Settings.") }
+        guard let key = try context.secrets.read("warp.apiKey"), !key.isEmpty else { throw AIUsageMeterError.setupNeeded("Add a Warp API key in Settings.") }
         var request = RequestFactory.request(url: URL(string: "https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo")!, method: .post, bearer: key, headers: WarpQuery.headers)
         request.httpBody = try JSONSerialization.data(withJSONObject: WarpQuery.body)
         let (data, _) = try await context.http.data(for: request, maximumBytes: 2_000_000)
@@ -283,12 +272,10 @@ public struct GenericProviderAdapter: ProviderAdapter {
     }
 
     private func failure(from result: Result<Data, Error>) -> Error {
-        switch result { case .success: return UsageMeterError.invalidResponse; case .failure(let error): return error }
+        switch result { case .success: return AIUsageMeterError.invalidResponse; case .failure(let error): return error }
     }
 }
 
-/// Warp answers only its own GraphQL operation, so the document and the client
-/// context it expects travel with the request rather than being built inline.
 public enum WarpQuery {
     public static let document = """
     query GetRequestLimitInfo($requestContext: RequestContext!) {
@@ -334,12 +321,12 @@ public enum WarpQuery {
 public enum CredentialResolver {
     public static func jsonFile(_ path: String, files: LocalFiles) throws -> JSONValue {
         do { return try JSONValue.decode(files.read(relativePath: path, maximumBytes: 2_000_000)) }
-        catch { throw UsageMeterError.setupNeeded("No usable credential was found at ~/\(path).") }
+        catch { throw AIUsageMeterError.setupNeeded("No usable credential was found at ~/\(path).") }
     }
 
     public static func token(from root: JSONValue, paths: [String]) throws -> String {
         for path in paths { if let token = root.value(at: path)?.string, !token.isEmpty { return token } }
-        throw UsageMeterError.setupNeeded("The saved credential does not contain an access token.")
+        throw AIUsageMeterError.setupNeeded("The saved credential does not contain an access token.")
     }
 
     public static func claude(files: LocalFiles, external: ExternalCredentials = NoExternalCredentials()) throws -> JSONValue {
@@ -351,25 +338,21 @@ public enum CredentialResolver {
         var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         query[kSecAttrAccount as String] = NSUserName()
         var output: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &output) == errSecSuccess, let data = output as? Data else { throw UsageMeterError.setupNeeded("Claude Code is not signed in.") }
+        guard SecItemCopyMatching(query as CFDictionary, &output) == errSecSuccess, let data = output as? Data else { throw AIUsageMeterError.setupNeeded("Claude Code is not signed in.") }
         return data
     }
 
-    /// `~/.grok/auth.json` is keyed by OIDC scope URL, one entry per sign-in, and
-    /// `grok login` writes the SuperGrok entry under an `auth.x.ai` scope beside
-    /// any legacy session. Dictionary order is not stable, so the entry has to be
-    /// chosen by scope and expiry rather than by whichever one is read first.
     public static func grokToken(_ root: JSONValue) throws -> String {
         if let direct = try? token(from: root, paths: ["access_token", "token", "key"]) { return direct }
-        guard let entries = root.object else { throw UsageMeterError.setupNeeded("Grok is not signed in. Run `grok login`.") }
+        guard let entries = root.object else { throw AIUsageMeterError.setupNeeded("Grok is not signed in. Run `grok login`.") }
         let candidates = entries.compactMap { scope, node -> (scope: String, token: String, expiry: Date?)? in
             guard let value = node.value(at: "key")?.string ?? node.value(at: "access_token")?.string, !value.isEmpty else { return nil }
             return (scope, value, JSONPicking.date(node, ["expires_at", "expiry", "expires"]))
         }
-        guard !candidates.isEmpty else { throw UsageMeterError.setupNeeded("Grok is not signed in. Run `grok login`.") }
+        guard !candidates.isEmpty else { throw AIUsageMeterError.setupNeeded("Grok is not signed in. Run `grok login`.") }
         let now = Date()
         let live = candidates.filter { $0.expiry.map { $0 > now } ?? true }
-        guard !live.isEmpty else { throw UsageMeterError.expiredCredential("Grok’s saved token expired. Run `grok login` to sign in again.") }
+        guard !live.isEmpty else { throw AIUsageMeterError.expiredCredential("Grok’s saved token expired. Run `grok login` to sign in again.") }
         let ranked = live.sorted { left, right in
             let leftPreferred = left.scope.contains("auth.x.ai"), rightPreferred = right.scope.contains("auth.x.ai")
             if leftPreferred != rightPreferred { return leftPreferred }
@@ -380,25 +363,21 @@ public enum CredentialResolver {
 
     public static func cursorToken(files: LocalFiles) async throws -> String {
         let db = files.homeDirectory.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb")
-        guard FileManager.default.fileExists(atPath: db.path) else { throw UsageMeterError.setupNeeded("Cursor’s local sign-in database was not found.") }
+        guard FileManager.default.fileExists(atPath: db.path) else { throw AIUsageMeterError.setupNeeded("Cursor’s local sign-in database was not found.") }
         let hex: String = try await Task.detached {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-            // hex() keeps the value intact whatever Cursor stored it as: a plain
-            // text read stops at the first NUL of a UTF-16 token.
             process.arguments = ["-readonly", db.path, "SELECT hex(value) FROM ItemTable WHERE key='cursorAuth/accessToken' LIMIT 1;"]
             let out = Pipe(); process.standardOutput = out; process.standardError = Pipe()
             try process.run(); process.waitUntilExit()
             let data = out.fileHandleForReading.readDataToEndOfFile()
-            guard process.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else { throw UsageMeterError.setupNeeded("Cursor is installed but not signed in.") }
+            guard process.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else { throw AIUsageMeterError.setupNeeded("Cursor is installed but not signed in.") }
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }.value
-        guard let token = decodeStoredToken(hex), !token.isEmpty else { throw UsageMeterError.setupNeeded("Cursor is installed but not signed in.") }
+        guard let token = decodeStoredToken(hex), !token.isEmpty else { throw AIUsageMeterError.setupNeeded("Cursor is installed but not signed in.") }
         return token
     }
 
-    /// Cursor writes the token as UTF-8 on most installs and as BOM-less UTF-16LE
-    /// on others, so both have to survive the round trip through `hex()`.
     static func decodeStoredToken(_ hex: String) -> String? {
         var bytes = [UInt8]()
         bytes.reserveCapacity(hex.count / 2)
@@ -423,16 +402,12 @@ public enum CredentialResolver {
         }
     }
 
-    /// Google stopped serving Code Assist over Gemini CLI OAuth for individual,
-    /// AI Pro, and Ultra accounts in June 2026. The refusal arrives as a 200 that
-    /// lists the account's tier as ineligible, and only the follow-up quota call
-    /// fails — so it has to be read here to say something useful.
     public static func rejectIneligibleCodeAssistTier(_ root: JSONValue) throws {
         guard root.value(at: "currentTier") == nil else { return }
         if root.value(at: "paidTier.name")?.string?.isEmpty == false { return }
         let ineligible = root.value(at: "ineligibleTiers")?.array ?? []
         guard ineligible.contains(where: { ($0.value(at: "reasonCode")?.string ?? "") == "UNSUPPORTED_CLIENT" }) else { return }
-        throw UsageMeterError.setupNeeded("Google no longer serves Code Assist to this account over Gemini CLI sign-in. Only Standard, Enterprise, and Workspace accounts remain supported.")
+        throw AIUsageMeterError.setupNeeded("Google no longer serves Code Assist to this account over Gemini CLI sign-in. Only Standard, Enterprise, and Workspace accounts remain supported.")
     }
 
     public struct JetBrainsQuota: Sendable {
@@ -441,9 +416,6 @@ public enum CredentialResolver {
         public let nextRefill: String?
     }
 
-    /// JetBrains keeps one settings directory per IDE and per release, so the
-    /// newest directory that actually holds a quota file is the live one — an
-    /// IDE upgraded last week still has last year's folder beside it.
     public static func jetBrainsQuota(files: LocalFiles) throws -> JetBrainsQuota {
         let roots = ["Library/Application Support/JetBrains", "Library/Application Support/Google"]
         for root in roots {
@@ -456,7 +428,7 @@ public enum CredentialResolver {
                 return JetBrainsQuota(ide: ide, quotaInfo: quotaInfo, nextRefill: attributes["nextRefill"])
             }
         }
-        throw UsageMeterError.setupNeeded("No JetBrains IDE on this Mac has written an AI Assistant quota yet.")
+        throw AIUsageMeterError.setupNeeded("No JetBrains IDE on this Mac has written an AI Assistant quota yet.")
     }
 
     public static func copilotToken(files: LocalFiles) throws -> String {
@@ -472,7 +444,7 @@ public enum CredentialResolver {
                 if bits.count == 2, ["oauth_token", "oauth-token"].contains(bits[0]), !bits[1].isEmpty { return bits[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }
             }
         }
-        throw UsageMeterError.setupNeeded("No existing GitHub Copilot or GitHub CLI token was found.")
+        throw AIUsageMeterError.setupNeeded("No existing GitHub Copilot or GitHub CLI token was found.")
     }
 
     private static func recursiveToken(_ root: JSONValue) -> String? {
@@ -485,15 +457,10 @@ public enum CredentialResolver {
     }
 }
 
-/// Collects every attribute in a small XML document. JetBrains stores JSON in
-/// attribute values, so the entity decoding `XMLParser` already does is exactly
-/// what is needed — `&quot;` and `&#10;` arrive as a quote and a newline.
 enum XMLAttributeReader {
     static func attributes(in data: Data) -> [String: String]? {
         let collector = Collector()
         let parser = XMLParser(data: data)
-        // The file is local and trusted, but nothing in it should be able to
-        // make UsageMeter fetch anything.
         parser.shouldResolveExternalEntities = false
         parser.delegate = collector
         guard parser.parse() else { return nil }
@@ -503,7 +470,6 @@ enum XMLAttributeReader {
     private final class Collector: NSObject, XMLParserDelegate {
         var found: [String: String] = [:]
         func parser(_ parser: XMLParser, didStartElement element: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String]) {
-            // Later elements win, matching the file's own last-write-wins order.
             for (key, value) in attributes { found[key] = value }
         }
     }

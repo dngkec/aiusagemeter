@@ -1,15 +1,37 @@
 import AppKit
-import UsageMeterCore
+import AIUsageMeterCore
 import SwiftUI
 
 // MARK: - Root
+
+/// The panel's own coordinate space: gauges report their centres in it so a card can find its gauge
+/// wherever the rail has scrolled to.
+enum NotchSpace {
+    static let panel = "aiusagemeter.panel"
+}
+
+struct GaugeCentreKey: PreferenceKey {
+    static let defaultValue: [ProviderID: CGFloat] = [:]
+    static func reduce(value: inout [ProviderID: CGFloat], nextValue: () -> [ProviderID: CGFloat]) {
+        value.merge(nextValue()) { _, next in next }
+    }
+}
+
+struct GaugeCentreReporter: View {
+    let id: ProviderID
+
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(key: GaugeCentreKey.self, value: [id: proxy.frame(in: .named(NotchSpace.panel)).midY])
+        }
+    }
+}
 
 struct NotchRootView: View {
     @ObservedObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Snapshot captures must be deterministic, so they render with motion off.
-    private var still: Bool { ProcessInfo.processInfo.environment["USAGEMETER_SNAPSHOT_PATH"] != nil }
+    private var still: Bool { ProcessInfo.processInfo.environment["AIUSAGEMETER_SNAPSHOT_PATH"] != nil }
     private var reduced: Bool { still || reduceMotion }
 
     var body: some View {
@@ -29,25 +51,22 @@ struct NotchRootView: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .trailing)
+            .coordinateSpace(name: NotchSpace.panel)
+            .onPreferenceChange(GaugeCentreKey.self) { centres in
+                MainActor.assumeIsolated { model.recordGaugeCentres(centres) }
+            }
         }
         .animation(still ? nil : Motion.reveal(reduced), value: model.idleMini)
         .animation(still ? nil : Motion.geometry(reduced), value: model.expandedProvider)
-        // Keyed on the identities rather than the count, so a reorder made in
-        // Settings slides into place instead of snapping.
-        .animation(still ? nil : Motion.geometry(reduced), value: model.visibleSnapshots.map(\.id))
+        .animation(still ? nil : Motion.geometry(reduced), value: model.railKey)
     }
 
-    /// The card is placed, not padded. A padded frame would lay transparent
-    /// card over the rail, and the rail would lose the hover that is holding
-    /// the card open the very moment the card appeared.
-    ///
-    /// Its hover region then reaches back across the gap to touch the rail, so
-    /// that a pointer travelling from a gauge to the card it opened is never
-    /// over neither of them — the one thing that reads as the card flinching
-    /// away from you.
+    /// Placed rather than padded: a padded frame would lay transparent card over the rail and take away the
+    /// hover holding the card open. Its hover region reaches back to the rail so the gap is never dead space.
     @ViewBuilder private func card(snapshot: ProviderSnapshot, layout: NotchLayout, size: CGSize) -> some View {
         let index = model.visibleSnapshots.firstIndex { $0.id == snapshot.id } ?? 0
-        let placement = layout.card(height: CardMetrics.height(for: snapshot), index: index)
+        let measured = model.gaugeCentres[snapshot.id].map { $0 - size.height / 2 }
+        let placement = layout.card(height: CardMetrics.height(for: snapshot), index: index, measured: measured)
         let reach = Metrics.cardWidth + Metrics.tailWidth + Metrics.tailGap
         DetailCard(
             snapshot: snapshot,
@@ -68,8 +87,6 @@ struct NotchRootView: View {
     }
 }
 
-/// Every vertical position in the overlay, derived once per render from the
-/// panel height SwiftUI actually gave us.
 struct NotchLayout {
     let count: Int
     let available: CGFloat
@@ -89,29 +106,25 @@ struct NotchLayout {
 
     var pitch: CGFloat { Metrics.item + spacing }
 
-    /// Offset of a gauge centre from the middle of the panel.
+    /// Where the gauge would sit with the rail at rest. Only a first-frame estimate once the rail
+    /// scrolls — the measured centre replaces it as soon as the layout has run.
     func gaugeCentre(index: Int) -> CGFloat {
-        guard !scrolls else { return 0 }
-        return -railHeight / 2 + Metrics.railPadding + CGFloat(index) * pitch + Metrics.gauge / 2
+        -railHeight / 2 + Metrics.railPadding + CGFloat(index) * pitch + Metrics.gauge / 2
     }
 
-    /// Where the card sits, and where its pointer must aim to still hit the gauge.
-    func card(height: CGFloat, index: Int) -> (centre: CGFloat, tailCentre: CGFloat) {
-        let gauge = gaugeCentre(index: index)
-        let room = max(0, available / 2 - height / 2 - 6)
-        let centre = min(max(gauge, -room), room)
-        let ideal = height / 2 + (gauge - centre)
-        let inset = Metrics.cardCorner + Metrics.tailHeight / 2
-        return (centre, min(max(ideal, inset), height - inset))
+    func card(height: CGFloat, index: Int, measured: CGFloat? = nil) -> (centre: CGFloat, tailCentre: CGFloat) {
+        let placement = OverlayLayout.cardPlacement(
+            gaugeCentre: Double(measured ?? gaugeCentre(index: index)),
+            cardHeight: Double(height),
+            available: Double(available),
+            tailInset: Double(Metrics.cardCorner + Metrics.tailHeight / 2)
+        )
+        return (CGFloat(placement.centre), CGFloat(placement.tailCentre))
     }
 }
 
 // MARK: - Rail
 
-/// The rail silhouette. `overhang` runs the shape past the trailing edge, which
-/// is flush with the side of the screen: the surface has no visible boundary
-/// there, so the border shape is given the overhang and the fill is not, and the
-/// hairline is drawn on the three edges that are a boundary and on no other.
 struct RailShape: InsettableShape {
     var inset: CGFloat = 0
     var overhang: CGFloat = 0
@@ -149,9 +162,6 @@ struct ProviderRail: View {
         .frame(width: Metrics.railWidth, height: layout.railHeight)
         .background {
             RailShape().fill(Palette.surface)
-            // strokeBorder, not stroke: a centred stroke puts half the hairline
-            // outside the fill, which both halves its weight and lays a
-            // translucent fringe over the desktop for the shadow to blur.
             RailShape(overhang: Metrics.hairline * 2)
                 .strokeBorder(Palette.edge, lineWidth: Metrics.hairline)
         }
@@ -159,12 +169,9 @@ struct ProviderRail: View {
         .shadow(color: .black.opacity(0.34), radius: Metrics.shadowSlack * 0.6, x: -4, y: 5)
         .onHover { model.railHover($0) }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("UsageMeter usage rail")
+        .accessibilityLabel("AIUsageMeter usage rail")
     }
 
-    /// Gauges, then the support footer under a hairline. The footer is measured
-    /// into `Metrics.railHeight`, so the rail is exactly as tall as this comes
-    /// out and the pointer aimed at a gauge still lands on it.
     private var column: some View {
         VStack(spacing: 0) {
             VStack(spacing: layout.spacing) {
@@ -178,8 +185,13 @@ struct ProviderRail: View {
                             pinned: model.pinnedProvider == snapshot.id,
                             refreshing: model.isRefreshing(snapshot.id),
                             reduced: reduced,
+                            scale: Metrics.scale,
                             action: { model.togglePin(snapshot.id) }
                         )
+                        // Equatable: a long rail must not redraw every gauge because one of them,
+                        // or something else on the model entirely, changed.
+                        .equatable()
+                        .background(GaugeCentreReporter(id: snapshot.id))
                         .onHover { model.hover(snapshot.id, inside: $0) }
                     }
                 }
@@ -200,9 +212,6 @@ struct ProviderRail: View {
     }
 }
 
-/// The only place the app asks for anything. Dim until the pointer finds it,
-/// warm once it has, and it opens a browser rather than anything in-app — so a
-/// mis-click costs a glance, never a page of UI.
 struct SupportHeart: View {
     let hovering: Bool
     var reduced: Bool = false
@@ -221,8 +230,8 @@ struct SupportHeart: View {
         .scaleEffect(hovering && !reduced ? 1.14 : 1)
         .animation(reduced ? nil : .easeOut(duration: 0.14), value: hovering)
         .onHover(perform: onHover)
-        .help("Support UsageMeter")
-        .accessibilityLabel("Support UsageMeter")
+        .help("Support AIUsageMeter")
+        .accessibilityLabel("Support AIUsageMeter")
         .accessibilityHint("Opens Buy Me a Coffee in your browser")
     }
 }
@@ -249,13 +258,20 @@ struct SetupButton: View {
     }
 }
 
-struct GaugeItem: View {
+struct GaugeItem: View, Equatable {
     let snapshot: ProviderSnapshot
     let active: Bool
     let pinned: Bool
     let refreshing: Bool
     let reduced: Bool
+    /// Compared, never read: `Metrics` is a global, so a size change has to defeat the equality check.
+    let scale: CGFloat
     let action: () -> Void
+
+    static func == (lhs: GaugeItem, rhs: GaugeItem) -> Bool {
+        lhs.snapshot == rhs.snapshot && lhs.active == rhs.active && lhs.pinned == rhs.pinned
+            && lhs.refreshing == rhs.refreshing && lhs.reduced == rhs.reduced && lhs.scale == rhs.scale
+    }
 
     private var percent: Double { min(max(snapshot.primaryPercent, 0), 100) }
     private var tint: Color { Color.usage(percent: percent, status: snapshot.status) }
@@ -265,8 +281,6 @@ struct GaugeItem: View {
             VStack(spacing: Metrics.gaugeLabelGap) {
                 UsageRing(percent: percent, tint: tint, glyph: snapshot.id.glyph, provider: snapshot.id, refreshing: refreshing, reduced: reduced)
                     .frame(width: Metrics.gauge, height: Metrics.gauge)
-                    // Says which gauge the open card belongs to, from the rail's
-                    // side of the gap as well as the pointer's.
                     .background { if active { Circle().fill(Palette.activeFill).padding(-Metrics.gaugeRing) } }
                 Text(caption)
                     .font(Typo.gaugeValue)
@@ -298,8 +312,6 @@ struct GaugeItem: View {
     }
 }
 
-/// Track, value arc, and — while a refresh is in flight — the white sweep that
-/// the value arc dims behind.
 struct UsageRing: View {
     let percent: Double
     let tint: Color
@@ -307,6 +319,8 @@ struct UsageRing: View {
     var provider: ProviderID?
     let refreshing: Bool
     let reduced: Bool
+
+    private var sweeping: Bool { refreshing && !reduced }
 
     var body: some View {
         ZStack {
@@ -319,14 +333,14 @@ struct UsageRing: View {
                 .rotationEffect(.degrees(-90))
                 .opacity(refreshing ? (reduced ? 0.55 : 0.42) : 1)
 
-            if refreshing, !reduced {
-                TimelineView(.animation) { context in
-                    Circle()
-                        .trim(from: 0, to: 0.25)
-                        .stroke(Palette.primary, style: StrokeStyle(lineWidth: Metrics.gaugeRing, lineCap: .round))
-                        .rotationEffect(.degrees(Motion.sweepAngle(at: context.date)))
-                }
-            }
+            // One repeating rotation the render server owns, rather than a TimelineView redrawing
+            // every gauge each frame: a refresh touches every provider at once.
+            Circle()
+                .trim(from: 0, to: 0.25)
+                .stroke(Palette.primary, style: StrokeStyle(lineWidth: Metrics.gaugeRing, lineCap: .round))
+                .rotationEffect(.degrees(sweeping ? 360 : 0))
+                .animation(sweeping ? Motion.sweepCycle : Motion.sweepStop, value: sweeping)
+                .opacity(sweeping ? 1 : 0)
 
             GlyphView(glyph: glyph, provider: provider, size: Metrics.glyph, color: Palette.primary)
         }
@@ -336,13 +350,8 @@ struct UsageRing: View {
 
 // MARK: - Card
 
-/// Card and pointer as one silhouette, so a single fill, one hairline, and one
-/// shadow wrap both and no seam shows where they meet.
 struct CardShape: InsettableShape {
-    /// Centre of the pointer, measured down from the top of the card.
     let tailCentre: CGFloat
-    /// Set by `inset(by:)`, so `strokeBorder` can trace the silhouette from
-    /// inside the fill instead of straddling it.
     var inset: CGFloat = 0
 
     func inset(by amount: CGFloat) -> CardShape {
@@ -354,8 +363,6 @@ struct CardShape: InsettableShape {
         let radius = max(0, min(Metrics.cardCorner - inset, min(rect.width - Metrics.tailWidth, rect.height) / 2))
         let bodyMaxX = rect.maxX - Metrics.tailWidth
         let half = max(0, Metrics.tailHeight / 2 - inset)
-        // Measured from the un-inset top, so an inset outline still points at
-        // the same gauge the fill does.
         let aim = min(max(tailCentre - inset, radius + half), rect.height - radius - half)
         let centre = rect.minY + aim
         let tip = Metrics.tailHeight * 0.11
@@ -506,7 +513,7 @@ struct CardContent: View {
                         .accessibilityLabel("Open \(snapshot.name) dashboard")
                 } else if needsAttention {
                     CardAction(title: "Settings", symbol: "chevron.right", action: openSettings)
-                        .accessibilityLabel("Open UsageMeter settings")
+                        .accessibilityLabel("Open AIUsageMeter settings")
                 }
             }
         }
@@ -525,8 +532,6 @@ struct CardContent: View {
         [.setupNeeded, .unauthorized, .expired].contains(snapshot.status)
     }
 
-    /// The state block already carries the failure message, so the footer keeps
-    /// to provenance instead of repeating it.
     private var subtitle: String {
         if snapshot.source == .demo { return "Deterministic sample data" }
         return snapshot.windows.count > CardMetrics.maximumRows
@@ -535,8 +540,6 @@ struct CardContent: View {
     }
 }
 
-/// Name and reading on one line, the bar under them, and the reset underneath
-/// in the quiet voice — so the eye lands on the number it came for.
 struct UsageRow: View {
     let window: UsageWindow
 
@@ -630,7 +633,7 @@ struct MiniTab: View {
         .contentShape(Rectangle())
         .onHover { if $0 { reveal() } }
         .onTapGesture(perform: reveal)
-        .accessibilityLabel("Show UsageMeter")
+        .accessibilityLabel("Show AIUsageMeter")
         .accessibilityAddTraits(.isButton)
     }
 }

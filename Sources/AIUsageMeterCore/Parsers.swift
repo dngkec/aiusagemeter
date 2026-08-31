@@ -32,7 +32,7 @@ public enum UsageParsers {
             return UsageWindow(id: id, label: label, used: percent, limit: 100, resetsAt: JSONPicking.date(root, resetPaths))
         }
         windows = merging(windows, extras: extras(root))
-        guard !windows.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !windows.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return windows
     }
 
@@ -54,18 +54,17 @@ public enum UsageParsers {
             windows.append(UsageWindow(id: "credits", label: "Credits", used: max(0, total - remaining), limit: total, resetsAt: JSONPicking.date(root, ["credits.reset_at", "credits.resets_at"]), kind: .credits))
         }
         windows = merging(windows, extras: extras(root))
-        guard !windows.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !windows.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return windows
     }
 
+    /// Credits first: it carries the subscription quota, and the gauge reads the first window.
     public static func grok(monthly: Data?, credits: Data?) throws -> [UsageWindow] {
-        let roots = try [monthly, credits].compactMap { try $0.map(JSONValue.decode) }
+        let roots = try [credits, monthly].compactMap { try $0.map(JSONValue.decode) }
         var output: [UsageWindow] = []
         for root in roots {
             let config = root.value(at: "config")?.nonNull ?? root
             let reset = JSONPicking.date(config, ["currentPeriod.end", "billingPeriodEnd"])
-            // A period that publishes no percentage is unknown usage, never 0%,
-            // so the on-demand ratio is the only fallback that may stand in.
             let onDemand = JSONPicking.number(config, ["onDemandCap.val", "onDemandCap"]).flatMap { cap -> Double? in
                 guard cap > 0, let used = JSONPicking.number(config, ["onDemandUsed.val", "onDemandUsed"]) else { return nil }
                 return used / cap * 100
@@ -73,7 +72,6 @@ public enum UsageParsers {
             if let percent = JSONPicking.number(config, ["creditUsagePercent", "usage_percentage", "usagePercent"]) ?? onDemand {
                 output.append(UsageWindow(id: "weekly", label: "Weekly", used: percent, limit: 100, resetsAt: reset))
             }
-            // The CLI's billing extension reports cents rather than a percentage.
             if let cap = JSONPicking.number(config, ["monthlyLimit.val", "monthlyLimit"]), cap > 0,
                let spent = JSONPicking.number(config, ["usage.totalUsed.val", "usage.totalUsed", "usage.includedUsed.val"]) {
                 output.append(UsageWindow(id: "included", label: "Included", used: spent / 100, limit: cap / 100, resetsAt: JSONPicking.date(root, ["billingCycle.billingPeriodEnd"]) ?? reset, kind: .apiCost))
@@ -84,7 +82,9 @@ public enum UsageParsers {
                     output.append(UsageWindow(id: product.value(at: "product")?.string ?? "product-\(index)", label: product.value(at: "product")?.string ?? "Product", used: percent, limit: 100, resetsAt: JSONPicking.date(config, ["billingPeriodEnd", "currentPeriod.end"])))
                 }
             }
-            if let limit = JSONPicking.number(root, ["monthlyLimit", "billing.monthlyLimit", "config.monthlyLimit"]), let used = JSONPicking.number(root, ["used", "monthlyUsed", "billing.used", "config.used"]) {
+            // A subscription account reports monthlyLimit 0, which is no on-demand cap rather than an empty one.
+            if let limit = JSONPicking.number(root, ["monthlyLimit", "billing.monthlyLimit", "config.monthlyLimit"]), limit > 0,
+               let used = JSONPicking.number(root, ["used", "monthlyUsed", "billing.used", "config.used"]) {
                 output.append(UsageWindow(id: "monthly", label: "Monthly", used: used, limit: limit, resetsAt: JSONPicking.date(root, ["billingPeriodEnd", "billing.billingPeriodEnd", "config.billingPeriodEnd"])))
             }
             let remaining = JSONPicking.number(root, ["remainingCredits", "credits.remaining", "balance"])
@@ -101,7 +101,7 @@ public enum UsageParsers {
         }
         output = output.uniquedWindows()
         for root in roots { output = merging(output, extras: extras(root)) }
-        guard !output.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !output.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return output
     }
 
@@ -125,7 +125,7 @@ public enum UsageParsers {
             }
         }
         windows = merging(windows.uniquedWindows(), extras: extras(root))
-        guard !windows.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !windows.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return windows
     }
 
@@ -138,8 +138,7 @@ public enum UsageParsers {
             let keys = preference + snapshots.keys.filter { !preference.contains($0) }.sorted()
             for key in keys {
                 guard let item = snapshots[key] else { continue }
-                // An unlimited quota reports entitlement 0 and 100% remaining;
-                // drawing it would put an empty-looking budget on the card.
+                // An unlimited quota reports entitlement 0 and 100% remaining, which would draw as an empty budget.
                 if JSONPicking.flag(item, ["unlimited"]) == true { continue }
                 let total = JSONPicking.number(item, ["quota_entitlement", "entitlement", "limit", "total"])
                 let remaining = JSONPicking.number(item, ["quota_remaining", "remaining"])
@@ -156,7 +155,7 @@ public enum UsageParsers {
             }
         }
         output = merging(output, extras: extras(root))
-        guard !output.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !output.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return output
     }
 
@@ -171,13 +170,10 @@ public enum UsageParsers {
             return UsageWindow(id: item.value(at: "modelId")?.string ?? "bucket-\(index)", label: item.value(at: "displayName")?.string ?? item.value(at: "modelId")?.string ?? "Model quota", used: used, limit: limit, resetsAt: JSONPicking.date(item, ["resetTime", "resetAt"] ))
         }
         let windows = merging(output, extras: extras(root))
-        guard !windows.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !windows.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return windows
     }
 
-    /// Kimi reports the membership request pool under `usage` and each rate-limit
-    /// window under `limits[]`, whose counts live one level down in `detail`. The
-    /// web gateway wraps the same pair in `usages[]`, one entry per scope.
     public static func kimi(_ data: Data) throws -> [UsageWindow] {
         let root = try JSONValue.decode(data)
         let container = root.value(at: "usages")?.array?.first ?? root.value(at: "data")?.nonNull ?? root
@@ -191,12 +187,10 @@ public enum UsageParsers {
             windows.append(window)
         }
         windows = merging(windows, extras: extras(root) + extras(container))
-        guard !windows.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !windows.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return windows
     }
 
-    /// Kimi sends its counts as decimal strings, and reports what is left rather
-    /// than what a window has consumed when both are not present.
     private static func counted(_ node: JSONValue, id: String, label: String, kind: UsageKind) -> UsageWindow? {
         guard let limit = JSONPicking.number(node, ["limit", "total", "quota"]), limit > 0 else { return nil }
         let used = JSONPicking.number(node, ["used", "usage"]) ?? JSONPicking.number(node, ["remaining"]).map { max(0, limit - $0) }
@@ -218,10 +212,7 @@ public enum UsageParsers {
         return "\(Int(minutes.rounded()))-minute limit"
     }
 
-    /// The cost report returns one bucket per day, each holding a `results` list,
-    /// and every `amount` is a decimal string in the currency's lowest unit —
-    /// cents. The month's spend is the sum of every result in every bucket,
-    /// converted once at the end; no bucket carries a running total.
+    /// Amounts are decimal strings in cents; the month's spend is the sum of every result in every daily bucket.
     public static func anthropicCost(_ data: Data, monthlyBudget: Double) throws -> [UsageWindow] {
         let root = try JSONValue.decode(data)
         var cents = 0.0
@@ -237,7 +228,7 @@ public enum UsageParsers {
             cents = amount
             found = true
         }
-        guard found else { throw UsageMeterError.invalidResponse }
+        guard found else { throw AIUsageMeterError.invalidResponse }
         return [UsageWindow(id: "monthly-cost", label: "Monthly API cost", used: cents / 100, limit: max(0.01, monthlyBudget), kind: .apiCost)]
     }
 
@@ -258,7 +249,7 @@ public enum UsageParsers {
             total = amount
             found = true
         }
-        guard found else { throw UsageMeterError.invalidResponse }
+        guard found else { throw AIUsageMeterError.invalidResponse }
         return [UsageWindow(id: "monthly-cost", label: "Monthly API cost", used: total, limit: monthlyBudget, kind: .apiCost)]
     }
 
@@ -284,7 +275,7 @@ public enum UsageParsers {
             }
         }
         windows = windows.uniquedWindows()
-        guard !windows.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !windows.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return windows
     }
 
@@ -293,17 +284,10 @@ public enum UsageParsers {
         let infos = root.value(at: "balance_infos")?.array ?? root.value(at: "balanceInfos")?.array ?? []
         let usd = infos.first { ($0.value(at: "currency")?.string ?? "").uppercased() == "USD" }
         let chosen = usd ?? infos.first ?? root
-        guard let remaining = JSONPicking.number(chosen, ["total_balance", "totalBalance", "balance", "remaining"]) else { throw UsageMeterError.invalidResponse }
+        guard let remaining = JSONPicking.number(chosen, ["total_balance", "totalBalance", "balance", "remaining"]) else { throw AIUsageMeterError.invalidResponse }
         return [balance(remaining: remaining, monthlyBudget: monthlyBudget)]
     }
 
-    /// A prepaid balance is not a quota, so it is drawn against the budget the
-    /// user expects to spend in a month: an account holding more than that is
-    /// not "used up", and one holding nothing is.
-    ///
-    /// The reading is money, so it is `.apiCost` rather than `.credits`: the
-    /// credits caption drops the currency whenever the amount lands on a whole
-    /// number, which would make the same balance change format as it is spent.
     static func balance(remaining: Double, monthlyBudget: Double, label: String = "Credits") -> UsageWindow {
         let budget = max(0.01, monthlyBudget)
         if remaining <= 0 { return UsageWindow(id: "credits", label: label, used: budget, limit: budget, kind: .apiCost) }
@@ -311,42 +295,34 @@ public enum UsageParsers {
         return UsageWindow(id: "credits", label: label, used: 0, limit: remaining, kind: .apiCost)
     }
 
-    /// xAI's prepaid ledger is an inverted running total in string USD cents:
-    /// a $10 top-up posts as `"-1000"`, so remaining credit is the negation.
+    /// The prepaid ledger is an inverted running total in string USD cents: a $10 top-up posts as "-1000".
     public static func xaiBalance(_ data: Data, monthlyBudget: Double) throws -> [UsageWindow] {
         let root = try JSONValue.decode(data)
-        guard let cents = JSONPicking.number(root, ["total.val", "total"]) else { throw UsageMeterError.invalidResponse }
+        guard let cents = JSONPicking.number(root, ["total.val", "total"]) else { throw AIUsageMeterError.invalidResponse }
         return [balance(remaining: -cents / 100, monthlyBudget: monthlyBudget)]
     }
 
     public static func moonshot(_ data: Data, monthlyBudget: Double) throws -> [UsageWindow] {
         let root = try JSONValue.decode(data)
         let container = root.value(at: "data")?.nonNull ?? root
-        guard let available = JSONPicking.number(container, ["available_balance", "availableBalance"]) else { throw UsageMeterError.invalidResponse }
+        guard let available = JSONPicking.number(container, ["available_balance", "availableBalance"]) else { throw AIUsageMeterError.invalidResponse }
         return [balance(remaining: available, monthlyBudget: monthlyBudget)]
     }
 
-    /// z.ai reports one entry per plan window. `TOKENS_LIMIT` and `CREDIT_LIMIT`
-    /// are Coding Plan windows; `TIME_LIMIT` is the separate MCP lane.
     public static func zai(_ data: Data) throws -> [UsageWindow] {
         let root = try JSONValue.decode(data)
-        guard let limits = root.value(at: "data.limits")?.array ?? root.value(at: "limits")?.array else { throw UsageMeterError.invalidResponse }
+        guard let limits = root.value(at: "data.limits")?.array ?? root.value(at: "limits")?.array else { throw AIUsageMeterError.invalidResponse }
         var ranked: [(sort: Double, window: UsageWindow)] = []
         for (index, item) in limits.enumerated() {
             let type = item.value(at: "type")?.string ?? ""
             guard ["TOKENS_LIMIT", "CREDIT_LIMIT", "TIME_LIMIT"].contains(type) else { continue }
-            // A published count beats the integer percentage, which is rounded.
             let cap = JSONPicking.number(item, ["usage"])
-            // Both counts are published and they can disagree after a top-up;
-            // the larger one is the safe reading of how much is gone.
             let current = JSONPicking.number(item, ["currentValue"])
             let spent = cap.flatMap { total in JSONPicking.number(item, ["remaining"]).map { max(0, total - $0) } }
             let used = [current, spent].compactMap { $0 }.max()
             let id = "\(type.lowercased())-\(index)"
             let label = zaiWindowLabel(item, type: type)
             let reset = JSONPicking.date(item, ["nextResetTime"])
-            // The gauge reads the first window, and the one that runs out first
-            // is the shortest; MCP is a separate budget and always sorts last.
             let sort = type == "TIME_LIMIT" ? .greatestFiniteMagnitude : (zaiWindowMinutes(item) ?? Double.greatestFiniteMagnitude / 2)
             if let cap, cap > 0, let used {
                 let kind: UsageKind = type == "CREDIT_LIMIT" ? .credits : .quota
@@ -355,13 +331,13 @@ public enum UsageParsers {
                 ranked.append((sort, UsageWindow(id: id, label: label, used: percent, limit: 100, resetsAt: reset)))
             }
         }
-        guard !ranked.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !ranked.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return ranked.enumerated()
+            // The gauge reads the first window, so the shortest sorts first and the separate MCP lane sorts last.
             .sorted { ($0.element.sort, $0.offset) < ($1.element.sort, $1.offset) }
             .map(\.element.window)
     }
 
-    /// Window length as minutes, from the unit code and count z.ai publishes.
     private static func zaiWindowMinutes(_ item: JSONValue) -> Double? {
         let minutesPerUnit: [Int: Double] = [1: 1440, 3: 60, 5: 1, 6: 10080]
         guard let unit = JSONPicking.number(item, ["unit"]).map({ Int($0) }), let scale = minutesPerUnit[unit],
@@ -369,9 +345,6 @@ public enum UsageParsers {
         return count * scale
     }
 
-    /// A plan can carry a token window and a credit window of the same length,
-    /// so the lane has to stay in the label; the window length arrives as a unit
-    /// code and a count rather than a duration.
     private static func zaiWindowLabel(_ item: JSONValue, type: String) -> String {
         let lane: String
         switch type {
@@ -385,8 +358,6 @@ public enum UsageParsers {
         return "\(lane), \(count) \(name)\(count == 1 ? "" : "s")"
     }
 
-    /// OpenCode reports each window's share consumed and how many seconds are
-    /// left, so the reset is relative to the moment of the reading.
     public static func openCodeZen(_ data: Data, now: Date = Date()) throws -> [UsageWindow] {
         let root = try JSONValue.decode(data)
         let container = root.value(at: "usage")?.nonNull ?? root.value(at: "data")?.nonNull ?? root
@@ -404,56 +375,43 @@ public enum UsageParsers {
             let reset = JSONPicking.number(lane, resetKeys).map { now.addingTimeInterval($0) }
             windows.append(UsageWindow(id: id, label: label, used: percent, limit: 100, resetsAt: reset))
         }
-        guard !windows.isEmpty else { throw UsageMeterError.invalidResponse }
+        guard !windows.isEmpty else { throw AIUsageMeterError.invalidResponse }
         return windows
     }
 
-    /// Warp counts requests, and an unlimited plan reports a zero limit that
-    /// would otherwise draw as an empty budget.
+    /// Warp reports its own failures inside a 200, and a plan with no request limit reports zero.
     public static func warp(_ data: Data) throws -> [UsageWindow] {
         let root = try JSONValue.decode(data)
-        // GraphQL reports its own failures inside a 200, so the message in the
-        // body is the only thing that explains a rejected key.
         if let message = root.value(at: "errors.0.message")?.string, !message.isEmpty {
-            throw UsageMeterError.setupNeeded("Warp rejected the request: \(message)")
+            throw AIUsageMeterError.setupNeeded("Warp rejected the request: \(message)")
         }
         guard let info = root.value(at: "data.user.user.requestLimitInfo")?.nonNull ?? root.value(at: "data.user.requestLimitInfo")?.nonNull ?? root.value(at: "requestLimitInfo")?.nonNull else {
-            throw UsageMeterError.invalidResponse
+            throw AIUsageMeterError.invalidResponse
         }
-        if JSONPicking.flag(info, ["isUnlimited"]) == true { throw UsageMeterError.setupNeeded("This Warp plan has no request limit to measure.") }
+        if JSONPicking.flag(info, ["isUnlimited"]) == true { throw AIUsageMeterError.setupNeeded("This Warp plan has no request limit to measure.") }
         guard let limit = JSONPicking.number(info, ["requestLimit"]), limit > 0,
-              let used = JSONPicking.number(info, ["requestsUsedSinceLastRefresh", "requestsUsed"]) else { throw UsageMeterError.invalidResponse }
+              let used = JSONPicking.number(info, ["requestsUsedSinceLastRefresh", "requestsUsed"]) else { throw AIUsageMeterError.invalidResponse }
         return [UsageWindow(id: "requests", label: "Requests", used: used, limit: limit, resetsAt: JSONPicking.date(info, ["nextRefreshTime"]), kind: .credits)]
     }
 
-    /// JetBrains IDEs write the assistant's quota to disk themselves: the XML
-    /// carries JSON inside its attributes, already entity-decoded by the parser.
+    /// JetBrains IDEs write the quota to disk themselves, as JSON inside XML attributes.
     public static func jetBrains(quotaInfo: String, nextRefill: String?) throws -> [UsageWindow] {
         let quota = try JSONValue.decode(Data(quotaInfo.utf8))
-        guard let maximum = JSONPicking.number(quota, ["maximum"]), maximum > 0 else { throw UsageMeterError.invalidResponse }
-        // `current` is what has been spent; `tariffQuota.available` is what is
-        // left, and the two do not always agree after a mid-period top-up.
+        guard let maximum = JSONPicking.number(quota, ["maximum"]), maximum > 0 else { throw AIUsageMeterError.invalidResponse }
         let used = JSONPicking.number(quota, ["tariffQuota.available"]).map { max(0, maximum - $0) }
             ?? JSONPicking.number(quota, ["current"])
-        guard let used else { throw UsageMeterError.invalidResponse }
+        guard let used else { throw AIUsageMeterError.invalidResponse }
         var reset: Date?
         if let nextRefill, let refill = try? JSONValue.decode(Data(nextRefill.utf8)) {
             reset = JSONPicking.date(refill, ["next"])
         }
-        // Quotas run to millions of tokens, so the share consumed is the only
-        // reading that fits a gauge.
         return [UsageWindow(id: "quota", label: "Current", used: used, limit: maximum, resetsAt: reset ?? JSONPicking.date(quota, ["until"]))]
     }
 
-    /// `GET /v1/admin/spend-limit` already reports the month's spend against the
-    /// organization's cap, so it is the whole reading. `/v1/admin/usage` breaks
-    /// consumption down per model with no cost total — pricing it needs a rate
-    /// card UsageMeter does not carry — so it is not used here.
     public static func mistral(spendLimit: Data, monthlyBudget: Double) throws -> [UsageWindow] {
         let root = try JSONValue.decode(spendLimit)
         let limits = root.value(at: "limits.completion")?.nonNull ?? root.value(at: "limits")?.nonNull ?? root
-        guard let used = JSONPicking.number(limits, ["total_usage", "usage"]) else { throw UsageMeterError.invalidResponse }
-        // An organization with no cap set is measured against its own budget.
+        guard let used = JSONPicking.number(limits, ["total_usage", "usage"]) else { throw AIUsageMeterError.invalidResponse }
         let uncapped = JSONPicking.flag(limits, ["no_monthly_limit"]) == true
         let cap = uncapped ? nil : JSONPicking.number(limits, ["usage_limit"])
         return [UsageWindow(id: "monthly-cost", label: "Monthly API cost", used: used, limit: max(0.01, cap ?? monthlyBudget), kind: .apiCost)]
@@ -468,14 +426,13 @@ public enum UsageParsers {
         if let percent = root.value(at: connector.percentPath)?.double {
             windows = [UsageWindow(id: "custom", label: connector.name, used: percent, limit: 100, resetsAt: reset, kind: kind)]
         } else {
-            guard let used = root.value(at: connector.usedPath)?.double else { throw UsageMeterError.missingField(connector.usedPath) }
-            guard let limit = root.value(at: connector.limitPath)?.double else { throw UsageMeterError.missingField(connector.limitPath) }
+            guard let used = root.value(at: connector.usedPath)?.double else { throw AIUsageMeterError.missingField(connector.usedPath) }
+            guard let limit = root.value(at: connector.limitPath)?.double else { throw AIUsageMeterError.missingField(connector.limitPath) }
             windows = [UsageWindow(id: "custom", label: connector.name, used: used, limit: limit, resetsAt: reset, kind: kind)]
         }
         return merging(windows, extras: extras(root))
     }
 
-    /// Extra usage and credits that appear on any provider payload, omitted when absent.
     private static func extras(_ root: JSONValue) -> [UsageWindow] {
         var windows: [UsageWindow] = []
         if let extra = claudeExtra(root) { windows.append(extra) }
@@ -495,14 +452,12 @@ public enum UsageParsers {
         return output
     }
 
-    /// Extra usage is omitted unless the account has it enabled and reports a cap.
     private static func claudeExtra(_ root: JSONValue) -> UsageWindow? {
         let extra = root.value(at: "extra_usage") ?? root.value(at: "extraUsage")
         guard let extra else { return nil }
         if JSONPicking.flag(extra, ["is_enabled", "enabled"]) == false { return nil }
         guard let used = JSONPicking.number(extra, ["used_credits", "usedCredits", "used", "amount"]),
               let limit = JSONPicking.number(extra, ["monthly_limit", "monthlyLimit", "limit"]), limit > 0 else {
-            // An enabled account can report the share consumed and nothing else.
             guard let percent = JSONPicking.number(extra, ["utilization", "used_percent"]) else { return nil }
             return UsageWindow(id: "extra_usage", label: "Extra usage", used: percent, limit: 100)
         }

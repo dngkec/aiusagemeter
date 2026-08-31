@@ -3,19 +3,19 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleDisplayName</key><string>UsageMeter</string>
-    <key>CFBundleExecutable</key><string>UsageMeter</string>
+    <key>CFBundleDisplayName</key><string>AIUsageMeter</string>
+    <key>CFBundleExecutable</key><string>AIUsageMeter</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>CFBundleIdentifier</key><string>app.usagemeter.UsageMeter</string>
+    <key>CFBundleIdentifier</key><string>app.aiusagemeter.AIUsageMeter</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>UsageMeter</string>
+    <key>CFBundleName</key><string>AIUsageMeter</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0.0</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 UsageMeter contributors</string>
+    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 AIUsageMeter contributors</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
 </dict>

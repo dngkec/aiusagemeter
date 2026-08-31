@@ -7,10 +7,52 @@ public protocol SecretStore: Sendable {
 }
 
 public struct KeychainSecretStore: SecretStore {
+    public static let defaultService = "app.aiusagemeter.AIUsageMeter"
+    /// The service keys were stored under before the app was renamed to
+    /// AIUsageMeter. Reads fall through to it so an existing install does not
+    /// look signed out after the rename.
+    public static let serviceBeforeRename = "app.usagemeter.UsageMeter"
+
     public let service: String
-    public init(service: String = "app.usagemeter.UsageMeter") { self.service = service }
+    /// Only the app's own service carries items forward; a caller that names a
+    /// service means that one and nothing else.
+    private let priorService: String?
+
+    public init(service: String = KeychainSecretStore.defaultService) {
+        self.service = service
+        priorService = service == Self.defaultService ? Self.serviceBeforeRename : nil
+    }
 
     public func read(_ account: String) throws -> String? {
+        if let value = try Self.read(account, service: service) { return value }
+        guard let priorService, let carried = try Self.read(account, service: priorService) else { return nil }
+        // Copy forward so later reads hit the current service directly. A
+        // failure here costs only the next read, so the value still stands.
+        try? write(carried, account: account)
+        return carried
+    }
+
+    public func write(_ value: String?, account: String) throws {
+        let match: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+        SecItemDelete(match as CFDictionary)
+        // Drop the pre-rename item too, or it would shadow a cleared key.
+        if let priorService {
+            SecItemDelete([
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: priorService,
+                kSecAttrAccount as String: account,
+            ] as CFDictionary)
+        }
+        guard let value, !value.isEmpty else { return }
+        let add = match.merging([
+            kSecValueData as String: Data(value.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]) { _, new in new }
+        let status = SecItemAdd(add as CFDictionary, nil)
+        guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
+    }
+
+    private static func read(_ account: String, service: String) throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -25,18 +67,6 @@ public struct KeychainSecretStore: SecretStore {
         guard let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
-
-    public func write(_ value: String?, account: String) throws {
-        let match: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
-        SecItemDelete(match as CFDictionary)
-        guard let value, !value.isEmpty else { return }
-        let add = match.merging([
-            kSecValueData as String: Data(value.utf8),
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-        ]) { _, new in new }
-        let status = SecItemAdd(add as CFDictionary, nil)
-        guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
-    }
 }
 
 public final class MemorySecretStore: SecretStore, @unchecked Sendable {
@@ -47,9 +77,6 @@ public final class MemorySecretStore: SecretStore, @unchecked Sendable {
     public func write(_ value: String?, account: String) throws { lock.withLock { values[account] = value } }
 }
 
-/// A credential another application owns in the login keychain. Reading one can
-/// raise a system prompt and returns a real secret, so it is injected rather
-/// than reached for directly: nothing but the running app should touch it.
 public protocol ExternalCredentials: Sendable {
     func credential(service: String) throws -> Data
 }
@@ -59,20 +86,17 @@ public struct SystemExternalCredentials: ExternalCredentials {
     public func credential(service: String) throws -> Data { try CredentialResolver.externalKeychain(service: service) }
 }
 
-/// Stands in for a machine where the other application is not signed in.
 public struct NoExternalCredentials: ExternalCredentials {
     public init() {}
     public func credential(service: String) throws -> Data {
-        throw UsageMeterError.setupNeeded("\(service) is not signed in.")
+        throw AIUsageMeterError.setupNeeded("\(service) is not signed in.")
     }
 }
 
 public protocol LocalFiles: Sendable {
     var homeDirectory: URL { get }
     func read(relativePath: String, maximumBytes: Int) throws -> Data
-    /// Immediate subdirectory names, newest first. Providers that write their
-    /// own quota to disk keep it under a directory named for the app version,
-    /// so the newest one is the reading that counts.
+    /// Newest first: a provider that writes its own quota keeps it under a directory named for the app version.
     func subdirectories(relativePath: String) throws -> [String]
 }
 
@@ -82,7 +106,7 @@ public struct DiskLocalFiles: LocalFiles {
     public func read(relativePath: String, maximumBytes: Int = 2_000_000) throws -> Data {
         let url = try resolve(relativePath)
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
-        guard values.isRegularFile == true, (values.fileSize ?? 0) <= maximumBytes else { throw UsageMeterError.oversizedResponse }
+        guard values.isRegularFile == true, (values.fileSize ?? 0) <= maximumBytes else { throw AIUsageMeterError.oversizedResponse }
         return try Data(contentsOf: url, options: .mappedIfSafe)
     }
 
@@ -101,7 +125,7 @@ public struct DiskLocalFiles: LocalFiles {
     private func resolve(_ relativePath: String) throws -> URL {
         let normalized = relativePath.hasPrefix("/") ? String(relativePath.dropFirst()) : relativePath
         let url = homeDirectory.appendingPathComponent(normalized).standardizedFileURL
-        guard url.path.hasPrefix(homeDirectory.standardizedFileURL.path + "/") else { throw UsageMeterError.invalidURL("Credential path escaped the home directory.") }
+        guard url.path.hasPrefix(homeDirectory.standardizedFileURL.path + "/") else { throw AIUsageMeterError.invalidURL("Credential path escaped the home directory.") }
         return url
     }
 }
@@ -109,8 +133,6 @@ public struct DiskLocalFiles: LocalFiles {
 public struct MemoryLocalFiles: LocalFiles {
     public var homeDirectory = URL(fileURLWithPath: "/test-home")
     public var files: [String: Data]
-    /// Subdirectory names per parent path, in the order the disk store would
-    /// return them: newest first.
     public var directories: [String: [String]]
     public init(_ strings: [String: String], directories: [String: [String]] = [:]) {
         files = strings.mapValues { Data($0.utf8) }

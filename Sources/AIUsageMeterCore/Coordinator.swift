@@ -52,11 +52,11 @@ public actor RefreshCoordinator {
     nonisolated static func failure(id: ProviderID, error: Error) -> ProviderSnapshot {
         let status: ProviderStatus
         switch error {
-        case UsageMeterError.setupNeeded: status = .setupNeeded
-        case UsageMeterError.unauthorized: status = .unauthorized
-        case UsageMeterError.rateLimited: status = .rateLimited
-        case UsageMeterError.offline, URLError.notConnectedToInternet: status = .offline
-        case UsageMeterError.expiredCredential: status = .expired
+        case AIUsageMeterError.setupNeeded: status = .setupNeeded
+        case AIUsageMeterError.unauthorized: status = .unauthorized
+        case AIUsageMeterError.rateLimited: status = .rateLimited
+        case AIUsageMeterError.offline, URLError.notConnectedToInternet: status = .offline
+        case AIUsageMeterError.expiredCredential: status = .expired
         default: status = .error
         }
         return ProviderSnapshot(id: id, status: status, message: (error as? LocalizedError)?.errorDescription ?? "Refresh failed")

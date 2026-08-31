@@ -16,7 +16,7 @@ public enum JSONValue: Equatable, Sendable {
             if CFGetTypeID(value) == CFBooleanGetTypeID() { return .bool(value.boolValue) }
             return .number(value.doubleValue)
         case is NSNull: return .null
-        default: throw UsageMeterError.invalidResponse
+        default: throw AIUsageMeterError.invalidResponse
         }
     }
 
@@ -58,9 +58,7 @@ public enum JSONValue: Equatable, Sendable {
     public var object: [String: JSONValue]? { if case .object(let o) = self { return o }; return nil }
     public var array: [JSONValue]? { if case .array(let a) = self { return a }; return nil }
 
-    /// A present-but-null field carries no more information than a missing one,
-    /// and providers use the two interchangeably. Treating them alike keeps a
-    /// null from standing in for a value that a later candidate path holds.
+    /// Providers use null and absent interchangeably, so a null must not shadow a later candidate path.
     public var nonNull: JSONValue? { self == .null ? nil : self }
 }
 
@@ -77,7 +75,7 @@ public enum DateParser {
         if let date = iso.date(from: raw) { return date }
         iso.formatOptions = [.withInternetDateTime]
         if let date = iso.date(from: raw) { return date }
-        // Copilot reports its quota reset as a bare UTC calendar day.
+        // Copilot reports its reset as a bare UTC calendar day.
         return dayOnly.date(from: raw)
     }
 

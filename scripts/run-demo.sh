@@ -1,14 +1,14 @@
 #!/bin/zsh
 set -euo pipefail
 
-USAGEMETER_SCRIPT_DIR=${0:A:h}
-USAGEMETER_ROOT=${USAGEMETER_SCRIPT_DIR:h}
-USAGEMETER_APP="$USAGEMETER_ROOT/dist/UsageMeter.app"
+AIUSAGEMETER_SCRIPT_DIR=${0:A:h}
+AIUSAGEMETER_ROOT=${AIUSAGEMETER_SCRIPT_DIR:h}
+AIUSAGEMETER_APP="$AIUSAGEMETER_ROOT/dist/AIUsageMeter.app"
 
-if [[ ! -x "$USAGEMETER_APP/Contents/MacOS/UsageMeter" ]]; then
-  "$USAGEMETER_ROOT/scripts/build-app.sh"
+if [[ ! -x "$AIUSAGEMETER_APP/Contents/MacOS/AIUsageMeter" ]]; then
+  "$AIUSAGEMETER_ROOT/scripts/build-app.sh"
 fi
 
-export USAGEMETER_DEMO=1
-export USAGEMETER_DEMO_EXPANDED=1
-exec "$USAGEMETER_APP/Contents/MacOS/UsageMeter"
+export AIUSAGEMETER_DEMO=1
+export AIUSAGEMETER_DEMO_EXPANDED=1
+exec "$AIUSAGEMETER_APP/Contents/MacOS/AIUsageMeter"

@@ -69,7 +69,6 @@ public enum ProviderID: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// Where a provider's usage lives in the two regions that serve it separately.
 public enum ProviderRegion: String, Codable, Sendable, CaseIterable {
     case global, china
 
@@ -81,7 +80,6 @@ public enum ProviderRegion: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// Built-in live sources that store a key in UsageMeter’s Keychain item.
 public enum LiveCredential {
     public static func account(for id: ProviderID) -> String? {
         switch id {
@@ -99,8 +97,6 @@ public enum LiveCredential {
         }
     }
 
-    /// True only where the reading is money measured against a budget the user
-    /// sets. A percentage or request-count quota carries its own limit.
     public static func usesMonthlyBudget(_ id: ProviderID) -> Bool {
         switch id {
         case .anthropicCost, .openAIAPI, .openRouter, .deepSeek, .mistral, .xaiAPI, .moonshot: return true
@@ -117,7 +113,6 @@ public enum LiveCredential {
         }
     }
 
-    /// Providers whose endpoint puts an account identifier in the path.
     public static func workspacePrompt(for id: ProviderID) -> String? {
         switch id {
         case .xaiAPI: return "Team ID"
@@ -125,7 +120,6 @@ public enum LiveCredential {
         }
     }
 
-    /// Providers served from a separate host inside mainland China.
     public static func usesRegion(_ id: ProviderID) -> Bool {
         switch id {
         case .moonshot, .zai: return true
@@ -185,7 +179,6 @@ public struct UsageWindow: Codable, Equatable, Sendable, Identifiable {
     public var fraction: Double { limit > 0 ? max(0, used / limit) : 0 }
     public var percent: Double { fraction * 100 }
 
-    /// Gauge/card value: a percentage for plan quotas, amounts for spend and credits.
     public var readingCaption: String {
         switch kind {
         case .quota: return "\(Int(percent.rounded()))%"
@@ -198,7 +191,6 @@ public struct UsageWindow: Codable, Equatable, Sendable, Identifiable {
         }
     }
 
-    /// Fallback under the bar when the provider did not report a reset.
     public var remainingCaption: String? {
         switch kind {
         case .quota: return nil
@@ -240,8 +232,6 @@ public struct ProviderSnapshot: Codable, Equatable, Sendable, Identifiable {
 
     public var primaryPercent: Double { windows.first?.percent ?? 0 }
 
-    /// Card rows. Extra usage and credits take a slot when present so they
-    /// are not buried under a third model-specific quota window.
     public func featuredWindows(limit: Int = 3) -> [UsageWindow] {
         guard windows.count > limit else { return windows }
         let extras = windows.filter { $0.kind != .quota }
@@ -326,7 +316,6 @@ public struct ProviderConfiguration: Codable, Equatable, Sendable, Identifiable 
     public var showInNotch: Bool
     public var mode: ProviderMode
     public var monthlyBudget: Double
-    /// Account identifier some endpoints put in the path, such as an xAI team.
     public var workspaceID: String
     public var region: ProviderRegion
     public var manual: ManualBudget
@@ -409,11 +398,8 @@ public enum ProviderOrdering {
         providers.swapAt(index, target)
     }
 
-    /// What the rail shows, in the order the settings list puts it.
-    ///
-    /// Readings arrive from whichever refresh last finished, so the order has to
-    /// come from the preferences rather than from the readings; otherwise a
-    /// reorder would not reach the rail until the next fetch.
+    /// Order comes from preferences, not from the readings, so a reorder reaches the rail without a refetch.
+    /// One list serves the rail, the menu, and the menu-bar gauge: what the notch shows is what they read.
     public static func arrange(_ snapshots: [ProviderSnapshot], by providers: [ProviderConfiguration]) -> [ProviderSnapshot] {
         var byID = Dictionary(snapshots.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return providers.compactMap { provider in
@@ -423,7 +409,7 @@ public enum ProviderOrdering {
     }
 }
 
-public enum UsageMeterError: LocalizedError, Equatable {
+public enum AIUsageMeterError: LocalizedError, Equatable {
     case setupNeeded(String), unauthorized, rateLimited, server(Int), offline, timeout, oversizedResponse, invalidResponse, expiredCredential(String), invalidURL(String), missingField(String)
     public var errorDescription: String? {
         switch self {

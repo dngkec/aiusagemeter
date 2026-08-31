@@ -13,7 +13,7 @@ body:
     attributes:
       label: For a new provider, where does the usage come from
       description: |
-        UsageMeter only reads documented or officially exposed endpoints, and it
+        AIUsageMeter only reads documented or officially exposed endpoints, and it
         never signs in on your behalf or imports browser cookies. If the service
         publishes usage only to its own web app, Custom JSON is the answer rather
         than a built-in connector.

@@ -10,7 +10,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: UsageMeter version
+      label: AIUsageMeter version
       description: Settings → About & Support, or the name of the disk image you installed.
       placeholder: 1.0.0
     validations:

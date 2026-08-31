@@ -2,19 +2,16 @@
 import Foundation
 import PackageDescription
 
-/// swift-testing ships with the toolchain, but a Command Line Tools install
-/// leaves its macro plugin and its frameworks somewhere the compiler does not
-/// look on its own. Point at them when that is the toolchain in use, and add
-/// nothing at all when it is not — an Xcode toolchain, which is what CI and
-/// most contributors have, needs none of it and rejects a foreign plugin.
+/// A Command Line Tools install leaves swift-testing's macro plugin where the
+/// compiler does not look; an Xcode toolchain needs none of it and rejects a
+/// foreign plugin, so the paths are added only for the former.
 private func selectedDeveloperDirectory() -> String {
     let commandLineTools = "/Library/Developer/CommandLineTools"
     let files = FileManager.default
     if let overridden = ProcessInfo.processInfo.environment["DEVELOPER_DIR"], files.fileExists(atPath: overridden) {
         return overridden
     }
-    // `xcode-select -p` reads this link, and falls back to Command Line Tools
-    // when what it points at is not actually installed.
+    // `xcode-select -p` reads this link.
     if let linked = try? files.destinationOfSymbolicLink(atPath: "/var/db/xcode_select_link"), files.fileExists(atPath: linked) {
         return linked
     }
@@ -37,23 +34,19 @@ private let testLinkerSettings: [LinkerSetting] = needsTestingPaths
     ])]
     : []
 
-/// The test suite is not part of the published repository, and SwiftPM refuses
-/// to load a manifest that declares a target whose directory is missing. So the
-/// test target is declared only where it exists: `swift test` works in a working
-/// copy that has `Tests/`, and a fresh clone still builds and packages the app.
-///
-/// SwiftPM caches the evaluated manifest, so adding or removing `Tests/` in an
-/// existing working copy may need `--manifest-cache none` once, or any edit to
-/// this file, before the change is noticed.
+/// SwiftPM refuses to load a manifest declaring a target whose directory is
+/// missing, and `Tests/` is not published, so the test target is declared only
+/// where it exists. The manifest is cached: adding or removing `Tests/` may need
+/// `--manifest-cache none` once before the change is noticed.
 private let testsPath = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()
-    .appendingPathComponent("Tests/UsageMeterCoreTests")
+    .appendingPathComponent("Tests/AIUsageMeterCoreTests")
 private let hasTests = FileManager.default.fileExists(atPath: testsPath.path)
 
 private let testTargets: [Target] = hasTests
     ? [.testTarget(
-        name: "UsageMeterCoreTests",
-        dependencies: ["UsageMeterCore"],
+        name: "AIUsageMeterCoreTests",
+        dependencies: ["AIUsageMeterCore"],
         resources: [.process("Fixtures")],
         swiftSettings: testSwiftSettings,
         linkerSettings: testLinkerSettings
@@ -61,20 +54,20 @@ private let testTargets: [Target] = hasTests
     : []
 
 let package = Package(
-    name: "UsageMeter",
+    name: "AIUsageMeter",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "UsageMeterCore", targets: ["UsageMeterCore"]),
-        .executable(name: "UsageMeter", targets: ["UsageMeter"]),
+        .library(name: "AIUsageMeterCore", targets: ["AIUsageMeterCore"]),
+        .executable(name: "AIUsageMeter", targets: ["AIUsageMeter"]),
     ],
     targets: [
         .target(
-            name: "UsageMeterCore",
+            name: "AIUsageMeterCore",
             linkerSettings: [.linkedFramework("Security")]
         ),
         .executableTarget(
-            name: "UsageMeter",
-            dependencies: ["UsageMeterCore"],
+            name: "AIUsageMeter",
+            dependencies: ["AIUsageMeterCore"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("SwiftUI"),

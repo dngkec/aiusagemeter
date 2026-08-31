@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to UsageMeter. -->
+<!-- Thanks for contributing to AIUsageMeter. -->
 
 ## What this changes
 

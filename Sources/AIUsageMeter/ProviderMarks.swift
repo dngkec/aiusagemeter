@@ -1,15 +1,9 @@
 import AppKit
-import UsageMeterCore
+import AIUsageMeterCore
 
-/// Official artwork, when the app owner has supplied it.
-///
-/// UsageMeter draws its own marks so that it never redistributes vendor logos.
-/// Dropping a file into `Resources/ProviderMarks` overrides the drawn mark for
-/// that provider; see the README in that folder.
 enum ProviderMarks {
     struct Mark {
         let image: NSImage
-        /// Tint to match the rail, rather than using the file's own colours.
         let template: Bool
     }
 

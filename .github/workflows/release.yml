@@ -34,10 +34,10 @@ jobs:
             dist/SHA256SUMS.txt
           generate_release_notes: true
           body: |
-            UsageMeter is ad-hoc signed rather than notarised, so the first launch
-            needs Finder: right-click **UsageMeter.app** and choose **Open**, then
+            AIUsageMeter is ad-hoc signed rather than notarised, so the first launch
+            needs Finder: right-click **AIUsageMeter.app** and choose **Open**, then
             confirm. Everything after that opens normally.
 
-            If you find UsageMeter useful, you can
+            If you find AIUsageMeter useful, you can
             [buy me a coffee](https://buymeacoffee.com/dngkec).
             Interface design by [@hivinz_](https://x.com/hivinz_).

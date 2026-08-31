@@ -8,8 +8,6 @@ public struct Rect: Equatable, Sendable {
     public var midY: Double { y + height / 2 }
 }
 
-/// How big the overlay is drawn. The view layer multiplies every measurement by
-/// the chosen scale, so one preference moves geometry and type together.
 public enum OverlaySize: String, Codable, Sendable, CaseIterable {
     case small, medium, large
 
@@ -30,16 +28,10 @@ public enum OverlaySize: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// Where the overlay sits on a display. Widths are supplied by the view layer
-/// because they depend on the size preference; this type owns only placement.
 public enum OverlayLayout {
-    /// Reference widths at `OverlaySize.medium`, for callers that only need a
-    /// sense of scale rather than the live measurement.
     public static let collapsedWidth = 72.0
     public static let expandedWidth = 358.0
 
-    /// Where the rail sits, honouring the vertical preference and never leaving
-    /// the visible frame.
     public static func frame(visibleScreen: Rect, contentHeight: Double, expanded: Bool, position: VerticalPosition, offset: Double = 0) -> Rect {
         let width = expanded ? expandedWidth : collapsedWidth
         let height = min(max(116, contentHeight), visibleScreen.height)
@@ -47,9 +39,6 @@ public enum OverlayLayout {
         return Rect(x: visibleScreen.maxX - width, y: y, width: width, height: height)
     }
 
-    /// The overlay window. It wraps the rail symmetrically so a card anchored to
-    /// the first or last gauge still has room, which is what lets the window be
-    /// sized once per session instead of resized under an animation.
     public static func panelFrame(visibleScreen: Rect, width: Double, railHeight: Double, panelHeight: Double, position: VerticalPosition, offset: Double = 0) -> Rect {
         let rail = frame(visibleScreen: visibleScreen, contentHeight: railHeight, expanded: true, position: position, offset: offset)
         let height = min(max(panelHeight, rail.height), visibleScreen.height)
@@ -57,12 +46,25 @@ public enum OverlayLayout {
         return Rect(x: visibleScreen.maxX - width, y: y, width: width, height: height)
     }
 
-    /// The resting tab, centred on wherever the rail would have been.
     public static func miniFrame(visibleScreen: Rect, width: Double, height: Double, railHeight: Double, position: VerticalPosition, offset: Double = 0) -> Rect {
         let rail = frame(visibleScreen: visibleScreen, contentHeight: railHeight, expanded: false, position: position, offset: offset)
         let tab = min(height, visibleScreen.height)
         let y = min(max(visibleScreen.y, rail.midY - tab / 2), visibleScreen.maxY - tab)
         return Rect(x: visibleScreen.maxX - width, y: y, width: width, height: tab)
+    }
+
+    /// Where the detail card sits, given the gauge it belongs to.
+    ///
+    /// `gaugeCentre` and the returned `centre` are offsets from the middle of the panel; `tailCentre`
+    /// is measured down from the top of the card. The card is kept inside the panel, and the tail then
+    /// takes up whatever slack that clamping introduced so it still points at its own gauge.
+    public static func cardPlacement(gaugeCentre: Double, cardHeight: Double, available: Double, tailInset: Double, margin: Double = 6) -> (centre: Double, tailCentre: Double) {
+        let room = max(0, available / 2 - cardHeight / 2 - margin)
+        let centre = min(max(gaugeCentre, -room), room)
+        let ideal = cardHeight / 2 + (gaugeCentre - centre)
+        let lowest = min(tailInset, cardHeight / 2)
+        let highest = max(cardHeight - tailInset, lowest)
+        return (centre, min(max(ideal, lowest), highest))
     }
 
     private static func origin(visibleScreen: Rect, height: Double, position: VerticalPosition, offset: Double) -> Double {

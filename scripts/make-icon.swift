@@ -2,10 +2,8 @@
 import AppKit
 import Foundation
 
-// Renders the app iconset. The mark is `Resources/icons/usagemeter.png` when it
-// is passed in; without it the script still produces a complete iconset by
-// drawing the gauge itself, so a checkout that is missing the artwork can
-// still build a signed app.
+// Renders the app iconset from `Resources/icons/aiusagemeter.png`, or from a drawn
+// gauge when that file is not passed in.
 
 guard CommandLine.arguments.count >= 2 else { fatalError("Usage: make-icon.swift output.iconset [logo.png]") }
 let output = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
@@ -20,9 +18,8 @@ let variants: [(String, Int)] = [
     ("icon_512x512.png", 512), ("icon_512x512@2x.png", 1024),
 ]
 
-/// The rounded square every macOS icon sits in. Apple's own ratio: the corner
-/// radius is a little under a quarter of the tile, and the tile is inset so the
-/// icon does not touch its neighbours in the Dock.
+/// Apple's tile ratio: corner radius just under a quarter of the tile, inset so
+/// the icon does not touch its neighbours in the Dock.
 func tile(_ pixels: CGFloat) -> NSBezierPath {
     let inset = pixels * 0.065
     let rect = NSRect(x: inset, y: inset, width: pixels - inset * 2, height: pixels - inset * 2)
@@ -30,7 +27,7 @@ func tile(_ pixels: CGFloat) -> NSBezierPath {
     return NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
 }
 
-/// The fallback mark: the three gauges, drawn the way the rail draws them.
+/// Fallback mark: three gauges, drawn the way the rail draws them.
 func drawGauges(_ pixels: CGFloat) {
     let centers = [0.30, 0.50, 0.70]
     let colors = [
@@ -63,8 +60,7 @@ for (name, size) in variants {
         NSColor.black.setFill(); panel.fill()
         drawGauges(pixels)
     } else {
-        // A near-white tile, because the mark is a saturated blue: on black it
-        // loses the contrast that makes it readable at 16 pt in the menu bar.
+        // Near-white: the saturated blue mark loses contrast on black at 16 pt.
         let ground = NSGradient(
             starting: NSColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 1),
             ending: NSColor(srgbRed: 0.914, green: 0.937, blue: 0.980, alpha: 1)

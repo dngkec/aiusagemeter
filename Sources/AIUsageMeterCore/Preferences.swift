@@ -8,8 +8,21 @@ public actor PreferencesStore {
         if let fileURL { self.fileURL = fileURL }
         else {
             let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            self.fileURL = base.appendingPathComponent("UsageMeter", isDirectory: true).appendingPathComponent("preferences.json")
+            let directory = base.appendingPathComponent("AIUsageMeter", isDirectory: true)
+            Self.carryForward(from: base.appendingPathComponent("UsageMeter", isDirectory: true), to: directory)
+            self.fileURL = directory.appendingPathComponent("preferences.json")
         }
+    }
+
+    /// Preferences lived under the app's old name before it was renamed to
+    /// AIUsageMeter. Move that folder across once so an existing install keeps
+    /// its providers instead of starting from defaults. A folder already at the
+    /// new name wins, and a move that fails just leaves the old one in place —
+    /// `load()` then falls back to defaults rather than failing.
+    static func carryForward(from old: URL, to new: URL) {
+        let files = FileManager.default
+        guard files.fileExists(atPath: old.path), !files.fileExists(atPath: new.path) else { return }
+        try? files.moveItem(at: old, to: new)
     }
 
     public func load() -> AppPreferences {

@@ -3,7 +3,7 @@
 dist/
 .swiftpm/
 *.xcresult
-UsageMeter.xcworkspace/
+AIUsageMeter.xcworkspace/
 
 # macOS
 .DS_Store
@@ -15,5 +15,5 @@ Tests/
 TEST_REPORT.md
 
 # Source artwork and captures nothing in the app or the README uses.
-Resources/icons/UsageMeter.svg
-docs/usagemeter-settings.png
+Resources/icons/AIUsageMeter.svg
+docs/aiusagemeter-settings.png

@@ -3,7 +3,7 @@
 ## Our pledge
 
 We as members, contributors, and leaders pledge to make participation in the
-UsageMeter community a harassment-free experience for everyone, regardless of
+AIUsageMeter community a harassment-free experience for everyone, regardless of
 age, body size, visible or invisible disability, ethnicity, sex characteristics,
 gender identity and expression, level of experience, education, socio-economic
 status, nationality, personal appearance, race, religion, or sexual identity and
@@ -53,7 +53,7 @@ an individual is officially representing the project in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behaviour may be
 reported to the maintainers through a
-[private security advisory](https://github.com/dngkec/usagemeter/security/advisories/new)
+[private security advisory](https://github.com/dngkec/aiusagemeter/security/advisories/new)
 or by opening an issue if the matter is not sensitive. All complaints will be
 reviewed and investigated promptly and fairly, and the privacy and security of
 the reporter will be respected.

@@ -1,9 +1,6 @@
-import UsageMeterCore
+import AIUsageMeterCore
 import SwiftUI
 
-/// How a provider is drawn in the rail. UsageMeter only draws a mark for the
-/// services it actually reads; everything else gets a system symbol or a
-/// monogram rather than an invented logo.
 enum ProviderGlyph {
     case burst
     case knot
@@ -50,8 +47,6 @@ extension ProviderID {
 
 struct GlyphView: View {
     let glyph: ProviderGlyph
-    /// Set when the glyph belongs to a catalog entry, so supplied artwork can
-    /// take precedence over the drawn mark.
     var provider: ProviderID?
     var size: CGFloat = Metrics.glyph
     var color: Color = .white
@@ -100,7 +95,6 @@ struct GlyphView: View {
     }
 }
 
-/// A sixteen-ray starburst: thin tapered needles around a solid core.
 struct BurstShape: Shape {
     var rays = 16
 
@@ -129,9 +123,6 @@ struct BurstShape: Shape {
     }
 }
 
-/// Six lobes closing into a scalloped ring around a hexagonal core — the
-/// interlocking-knot family, drawn so the cusps of neighbouring lobes meet
-/// exactly rather than piling into a disc.
 struct KnotShape: Shape {
     func path(in rect: CGRect) -> Path {
         let centre = CGPoint(x: rect.midX, y: rect.midY)
@@ -159,7 +150,6 @@ struct KnotShape: Shape {
     }
 }
 
-/// An isometric cube: three faces at three weights so it reads as a solid.
 struct CubeMark: View {
     let color: Color
 
@@ -190,7 +180,6 @@ struct CubeFace: Shape {
     }
 }
 
-/// A four-point star with concave sides.
 struct SparkShape: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height
@@ -206,7 +195,6 @@ struct SparkShape: Shape {
     }
 }
 
-/// Two angled bars crossing — the slash-mark family.
 struct SlashShape: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height
@@ -220,7 +208,6 @@ struct SlashShape: Shape {
     }
 }
 
-/// A rounded visor with two cut-out lenses.
 struct VisorShape: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height

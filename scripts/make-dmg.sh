@@ -1,74 +1,65 @@
 #!/bin/zsh
-# Packages dist/UsageMeter.app as a drag-to-install disk image.
-#
-# Everything the image needs is staged on disk first and the image is created
-# from that staging folder, so the only thing done to the mounted volume is the
-# Finder arrangement — which is best-effort: on a machine that denies Finder
-# automation (CI, most notably) the image is still produced, just with the
-# default list view instead of the laid-out window.
+# Packages dist/AIUsageMeter.app as a drag-to-install disk image.
 #
 #   ./scripts/make-dmg.sh [--no-build]
 set -euo pipefail
 
-USAGEMETER_SCRIPT_DIR=${0:A:h}
-USAGEMETER_ROOT=${USAGEMETER_SCRIPT_DIR:h}
-USAGEMETER_APP="$USAGEMETER_ROOT/dist/UsageMeter.app"
-USAGEMETER_STAGE="$USAGEMETER_ROOT/.build/dmg-stage"
-USAGEMETER_TEMP_DMG="$USAGEMETER_ROOT/.build/UsageMeter-rw.dmg"
-USAGEMETER_VOLUME="UsageMeter"
-USAGEMETER_BUILD=1
+AIUSAGEMETER_SCRIPT_DIR=${0:A:h}
+AIUSAGEMETER_ROOT=${AIUSAGEMETER_SCRIPT_DIR:h}
+AIUSAGEMETER_APP="$AIUSAGEMETER_ROOT/dist/AIUsageMeter.app"
+AIUSAGEMETER_STAGE="$AIUSAGEMETER_ROOT/.build/dmg-stage"
+AIUSAGEMETER_TEMP_DMG="$AIUSAGEMETER_ROOT/.build/AIUsageMeter-rw.dmg"
+AIUSAGEMETER_VOLUME="AIUsageMeter"
+AIUSAGEMETER_BUILD=1
 
-for USAGEMETER_ARG in "$@"; do
-  case "$USAGEMETER_ARG" in
-    --no-build) USAGEMETER_BUILD=0 ;;
-    *) echo "Unknown option: $USAGEMETER_ARG" >&2; exit 2 ;;
+for AIUSAGEMETER_ARG in "$@"; do
+  case "$AIUSAGEMETER_ARG" in
+    --no-build) AIUSAGEMETER_BUILD=0 ;;
+    *) echo "Unknown option: $AIUSAGEMETER_ARG" >&2; exit 2 ;;
   esac
 done
 
-if (( USAGEMETER_BUILD )) || [[ ! -d "$USAGEMETER_APP" ]]; then
-  "$USAGEMETER_ROOT/scripts/build-app.sh"
+if (( AIUSAGEMETER_BUILD )) || [[ ! -d "$AIUSAGEMETER_APP" ]]; then
+  "$AIUSAGEMETER_ROOT/scripts/build-app.sh"
 fi
 
-USAGEMETER_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$USAGEMETER_APP/Contents/Info.plist")
-USAGEMETER_DMG="$USAGEMETER_ROOT/dist/UsageMeter-$USAGEMETER_VERSION.dmg"
+AIUSAGEMETER_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$AIUSAGEMETER_APP/Contents/Info.plist")
+AIUSAGEMETER_DMG="$AIUSAGEMETER_ROOT/dist/AIUsageMeter-$AIUSAGEMETER_VERSION.dmg"
 
-# Stage: the app, the alias people drop it on, the window background, and the
-# icon the volume itself wears.
-rm -rf "$USAGEMETER_STAGE" "$USAGEMETER_TEMP_DMG" "$USAGEMETER_DMG"
-mkdir -p "$USAGEMETER_STAGE/.background" "$USAGEMETER_ROOT/dist"
-cp -R "$USAGEMETER_APP" "$USAGEMETER_STAGE/UsageMeter.app"
-ln -s /Applications "$USAGEMETER_STAGE/Applications"
-/usr/bin/swift "$USAGEMETER_ROOT/scripts/make-dmg-background.swift" "$USAGEMETER_STAGE/.background/background.tiff"
+# Stage the app, the Applications alias, the background, and the volume icon.
+rm -rf "$AIUSAGEMETER_STAGE" "$AIUSAGEMETER_TEMP_DMG" "$AIUSAGEMETER_DMG"
+mkdir -p "$AIUSAGEMETER_STAGE/.background" "$AIUSAGEMETER_ROOT/dist"
+cp -R "$AIUSAGEMETER_APP" "$AIUSAGEMETER_STAGE/AIUsageMeter.app"
+ln -s /Applications "$AIUSAGEMETER_STAGE/Applications"
+/usr/bin/swift "$AIUSAGEMETER_ROOT/scripts/make-dmg-background.swift" "$AIUSAGEMETER_STAGE/.background/background.tiff"
 
-# A read-write image first, because the Finder arrangement and the volume icon
-# have to be written into the volume before it is compressed and sealed. The
-# slack is for those two: `-srcfolder` alone sizes the image to its contents.
-USAGEMETER_SIZE=$(( $(/usr/bin/du -sm "$USAGEMETER_STAGE" | awk '{ print $1 }') + 24 ))
+# Read-write first: the arrangement and volume icon are written before sealing,
+# and `-srcfolder` alone would size the image to its contents with no slack.
+AIUSAGEMETER_SIZE=$(( $(/usr/bin/du -sm "$AIUSAGEMETER_STAGE" | awk '{ print $1 }') + 24 ))
 /usr/bin/hdiutil create \
-  -volname "$USAGEMETER_VOLUME" \
-  -srcfolder "$USAGEMETER_STAGE" \
+  -volname "$AIUSAGEMETER_VOLUME" \
+  -srcfolder "$AIUSAGEMETER_STAGE" \
   -fs HFS+ \
   -format UDRW \
-  -size "${USAGEMETER_SIZE}m" \
+  -size "${AIUSAGEMETER_SIZE}m" \
   -ov \
-  "$USAGEMETER_TEMP_DMG" >/dev/null
+  "$AIUSAGEMETER_TEMP_DMG" >/dev/null
 
-USAGEMETER_MOUNT=$(/usr/bin/hdiutil attach "$USAGEMETER_TEMP_DMG" -nobrowse -noverify -noautoopen | awk -F'\t' '/\/Volumes\// { print $NF }' | tail -1)
-USAGEMETER_MOUNTED_NAME=${USAGEMETER_MOUNT:t}
-echo "Mounted $USAGEMETER_MOUNT"
+AIUSAGEMETER_MOUNT=$(/usr/bin/hdiutil attach "$AIUSAGEMETER_TEMP_DMG" -nobrowse -noverify -noautoopen | awk -F'\t' '/\/Volumes\// { print $NF }' | tail -1)
+AIUSAGEMETER_MOUNTED_NAME=${AIUSAGEMETER_MOUNT:t}
+echo "Mounted $AIUSAGEMETER_MOUNT"
 
-usagemeter_detach() {
+aiusagemeter_detach() {
   for _ in 1 2 3 4 5; do
-    /usr/bin/hdiutil detach "$USAGEMETER_MOUNT" -quiet && return 0
+    /usr/bin/hdiutil detach "$AIUSAGEMETER_MOUNT" -quiet && return 0
     sleep 1
   done
-  /usr/bin/hdiutil detach "$USAGEMETER_MOUNT" -force -quiet || true
+  /usr/bin/hdiutil detach "$AIUSAGEMETER_MOUNT" -force -quiet || true
 }
-trap usagemeter_detach EXIT INT TERM
+trap aiusagemeter_detach EXIT INT TERM
 
-# Best-effort: the window layout needs Finder automation, which CI does not
-# grant. The image is still valid without it, just not laid out.
-/usr/bin/osascript - "$USAGEMETER_MOUNTED_NAME" <<'APPLESCRIPT' || echo "note: Finder would not arrange the window; the image is still valid"
+# Best-effort: the layout needs Finder automation, which CI does not grant.
+/usr/bin/osascript - "$AIUSAGEMETER_MOUNTED_NAME" <<'APPLESCRIPT' || echo "note: Finder would not arrange the window; the image is still valid"
 on run argv
   set volumeName to item 1 of argv
   tell application "Finder"
@@ -83,7 +74,7 @@ on run argv
       set icon size of viewOptions to 112
       set text size of viewOptions to 12
       set background picture of viewOptions to file ".background:background.tiff"
-      set position of item "UsageMeter.app" of container window to {160, 230}
+      set position of item "AIUsageMeter.app" of container window to {160, 230}
       set position of item "Applications" of container window to {480, 230}
       update without registering applications
       close
@@ -92,28 +83,24 @@ on run argv
 end run
 APPLESCRIPT
 
-# The volume icon goes on last. It is written here rather than staged because
-# `hdiutil create -srcfolder` does not carry `.VolumeIcon.icns` into the image,
-# and it goes after the arrangement because Finder removes the file when it
-# opens a volume that is already flagged as having a custom icon. The flag
-# itself needs Xcode's SetFile, so a Command Line Tools-only machine simply
-# ships the generic volume icon.
-cp "$USAGEMETER_APP/Contents/Resources/AppIcon.icns" "$USAGEMETER_MOUNT/.VolumeIcon.icns"
+# Last: `-srcfolder` does not carry `.VolumeIcon.icns` in, and Finder deletes it
+# when opening a volume already flagged for a custom icon. The flag needs SetFile.
+cp "$AIUSAGEMETER_APP/Contents/Resources/AppIcon.icns" "$AIUSAGEMETER_MOUNT/.VolumeIcon.icns"
 if [[ -x /usr/bin/SetFile ]]; then
-  /usr/bin/SetFile -a C "$USAGEMETER_MOUNT" || echo "note: could not flag the volume icon"
+  /usr/bin/SetFile -a C "$AIUSAGEMETER_MOUNT" || echo "note: could not flag the volume icon"
 else
   echo "note: SetFile is unavailable, so the volume keeps the generic icon"
 fi
 
 sync
-usagemeter_detach
+aiusagemeter_detach
 trap - EXIT INT TERM
 
-/usr/bin/hdiutil convert "$USAGEMETER_TEMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$USAGEMETER_DMG" >/dev/null
-rm -f "$USAGEMETER_TEMP_DMG"
-rm -rf "$USAGEMETER_STAGE"
+/usr/bin/hdiutil convert "$AIUSAGEMETER_TEMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$AIUSAGEMETER_DMG" >/dev/null
+rm -f "$AIUSAGEMETER_TEMP_DMG"
+rm -rf "$AIUSAGEMETER_STAGE"
 
-/usr/bin/hdiutil verify "$USAGEMETER_DMG" >/dev/null
-echo "Built $USAGEMETER_DMG"
-/usr/bin/shasum -a 256 "$USAGEMETER_DMG"
-/bin/ls -lh "$USAGEMETER_DMG" | awk '{ print $5 }'
+/usr/bin/hdiutil verify "$AIUSAGEMETER_DMG" >/dev/null
+echo "Built $AIUSAGEMETER_DMG"
+/usr/bin/shasum -a 256 "$AIUSAGEMETER_DMG"
+/bin/ls -lh "$AIUSAGEMETER_DMG" | awk '{ print $5 }'

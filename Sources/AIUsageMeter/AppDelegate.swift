@@ -1,5 +1,6 @@
 import AppKit
-import UsageMeterCore
+import Combine
+import AIUsageMeterCore
 import SwiftUI
 
 final class PassivePanel: NSPanel {
@@ -22,21 +23,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pointerInsidePanel = true
     private var pointerLeftTask: Task<Void, Never>?
     private var menuSignature: [String] = []
+    private var titleObserver: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        configureMainMenu()
         configurePanel()
         configureStatusItem()
         configureEvents()
         model.onPresentationChange = { [weak self] in self?.updatePresentation() }
         model.onOpenSettings = { [weak self] in self?.showSettings() }
         model.start()
-        if ProcessInfo.processInfo.environment["USAGEMETER_SNAPSHOT_TARGET"] == "settings" {
-            // Which pane a documentation capture wants. Only the deterministic
-            // ones are addressable; a provider pane depends on live readings.
-            switch ProcessInfo.processInfo.environment["USAGEMETER_SNAPSHOT_PANE"] {
+        if ProcessInfo.processInfo.environment["AIUSAGEMETER_SNAPSHOT_TARGET"] == "settings" {
+            switch ProcessInfo.processInfo.environment["AIUSAGEMETER_SNAPSHOT_PANE"] {
             case "about": model.settingsSelection = .about
             case "general": model.settingsSelection = .general
+            case let named?:
+                if let id = ProviderID(rawValue: named) { model.settingsSelection = .provider(id) }
             default: break
             }
             showSettings()
@@ -79,11 +82,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
     }
 
-    /// The window grows before the overlay opens and shrinks only once it has
-    /// finished closing, so a window resize never runs under an animation.
     private func updatePresentation() {
         guard let screen = selectedScreen() else { return }
-        guard model.preferences.overlayVisible else { shrinkTask?.cancel(); panel.orderOut(nil); return }
+        guard model.preferences.overlayVisible else {
+            shrinkTask?.cancel()
+            panel.orderOut(nil)
+            rebuildMenu()
+            return
+        }
 
         let visible = screen.visibleFrame
         let bounds = Rect(x: visible.minX, y: visible.minY, width: visible.width, height: visible.height)
@@ -119,13 +125,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         captureIfRequested()
     }
 
-    /// The window server, not SwiftUI, has the last word on where the pointer
-    /// is. A passive panel never becomes key, so a hover exit can be dropped;
-    /// this is what stops a dropped one from stranding a card on screen.
-    ///
-    /// It corrects, and never leads. A pointer mid-flight samples untidily, so
-    /// the overlay is only told the pointer has gone once it has stayed gone —
-    /// long enough that the answer cannot be a transient.
     private func pointerMoved() {
         guard panel.isVisible else { return }
         let inside = panel.frame.insetBy(dx: -8, dy: -8).contains(NSEvent.mouseLocation)
@@ -154,49 +153,102 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu()
     }
 
-    /// Rebuilding renders a fresh status image, so it is worth asking first
-    /// whether anything the menu shows has actually moved.
     private func rebuildMenu() {
-        let signature = model.visibleSnapshots.map { "\($0.id.rawValue):\($0.status.rawValue):\(Int($0.primaryPercent.rounded()))" }
+        let shown = model.visibleSnapshots
+        let signature = shown.map { "\($0.id.rawValue):\($0.status.rawValue):\(Int($0.primaryPercent.rounded()))" }
             + [model.preferences.overlayVisible ? "shown" : "hidden"]
         guard signature != menuSignature else { return }
         menuSignature = signature
+        let summary = model.summary
 
         let menu = NSMenu()
-        for snapshot in model.visibleSnapshots {
+        if let heading = MenuBarText.heading(summary) {
+            let item = NSMenuItem(title: heading, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
+        for snapshot in shown {
             let value = snapshot.status.isReady ? "\(Int(snapshot.primaryPercent.rounded()))%" : snapshot.status.shortLabel
             let item = NSMenuItem(title: "\(snapshot.name)   \(value)", action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu.addItem(item)
         }
-        if !model.visibleSnapshots.isEmpty { menu.addItem(.separator()) }
+        if !shown.isEmpty { menu.addItem(.separator()) }
         menu.addItem(withTitle: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r")
-        menu.addItem(withTitle: model.preferences.overlayVisible ? "Hide Notch" : "Show Notch", action: #selector(toggleOverlay), keyEquivalent: "h")
+        menu.addItem(withTitle: model.preferences.overlayVisible ? "Hide Notch" : "Show Notch", action: #selector(toggleOverlay), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(showSettingsAction), keyEquivalent: ",")
         menu.addItem(.separator())
         let support = NSMenuItem(title: "Buy Me a Coffee…", action: #selector(openSupport), keyEquivalent: "")
         support.image = NSImage(systemSymbolName: "heart.fill", accessibilityDescription: nil)
         menu.addItem(support)
-        menu.addItem(withTitle: "UsageMeter on GitHub…", action: #selector(openRepository), keyEquivalent: "")
-        menu.addItem(withTitle: "Design by \(SupportLinks.designerHandle)…", action: #selector(openDesigner), keyEquivalent: "")
+        menu.addItem(withTitle: "AIUsageMeter on GitHub…", action: #selector(openRepository), keyEquivalent: "")
+        menu.addItem(withTitle: "\(SupportLinks.designerCredit)…", action: #selector(openDesigner), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit UsageMeter", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        // Everything here is handled by the delegate except Quit, which the
-        // application itself answers: pointing that one at the delegate would
-        // leave a menu-bar-only app with no way out.
+        menu.addItem(withTitle: "Quit AIUsageMeter", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         for item in menu.items where item.action != nil { item.target = self }
         menu.items.last?.target = NSApp
         statusItem.menu = menu
 
-        let headline = model.headline
-        statusItem.button?.image = StatusGauge.image(
-            percent: headline?.status.isReady == true ? headline?.primaryPercent : nil,
-            status: headline?.status ?? .setupNeeded
-        )
-        statusItem.button?.toolTip = model.visibleSnapshots.isEmpty
-            ? "UsageMeter"
-            : model.visibleSnapshots.map { "\($0.name): \($0.status.isReady ? "\(Int($0.primaryPercent.rounded()))%" : $0.status.shortLabel)" }.joined(separator: "\n")
+        statusItem.button?.image = StatusGauge.image(percent: summary.average, status: summary.status)
+        statusItem.button?.toolTip = MenuBarText.tooltip(summary, snapshots: shown)
+    }
+
+    // MARK: - Main menu
+
+    /// A menu-bar-only app gets no menu bar of its own, and without one ⌘V never reaches a text field.
+    private func configureMainMenu() {
+        let name = "AIUsageMeter"
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About \(name)", action: #selector(showAboutAction), keyEquivalent: "").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Settings…", action: #selector(showSettingsAction), keyEquivalent: ",").target = self
+        appMenu.addItem(withTitle: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide \(name)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h").target = NSApp
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit \(name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q").target = NSApp
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: "")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        main.addItem(editItem)
+
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowItem.submenu = windowMenu
+        main.addItem(windowItem)
+
+        let helpItem = NSMenuItem()
+        let helpMenu = NSMenu(title: "Help")
+        helpMenu.addItem(withTitle: "\(name) on GitHub…", action: #selector(openRepository), keyEquivalent: "")
+        helpMenu.addItem(withTitle: "Report an Issue…", action: #selector(openIssues), keyEquivalent: "")
+        for item in helpMenu.items { item.target = self }
+        helpItem.submenu = helpMenu
+        main.addItem(helpItem)
+
+        NSApp.mainMenu = main
+        NSApp.windowsMenu = windowMenu
+        NSApp.helpMenu = helpMenu
     }
 
     // MARK: - Events
@@ -204,6 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureEvents() {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self else { return event }
+            guard !self.isSettingsEvent(event.window) else { return event }
             if event.type == .keyDown, event.keyCode == 53 { self.model.collapse(); return nil }
             if event.window != self.panel { self.model.collapse() }
             return event
@@ -211,8 +264,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.model.collapse() }
         }
-        // Both halves are needed: the global monitor sees the pointer while the
-        // app is passive, the local one while a menu or Settings has focus.
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { [weak self] _ in
             MainActor.assumeIsolated { self?.pointerMoved() }
         }) { moveMonitors.append(monitor) }
@@ -222,7 +273,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }) { moveMonitors.append(monitor) }
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.updatePresentation() }
+            Task { @MainActor in
+                self?.model.reloadScreens()
+                self?.updatePresentation()
+            }
         })
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -236,35 +290,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func refreshNow() { Task { await model.refresh() } }
     @objc private func toggleOverlay() { model.toggleOverlay() }
     @objc private func showSettingsAction() { showSettings() }
+    @objc private func showAboutAction() { model.settingsSelection = .about; showSettings() }
     @objc private func openSupport() { model.openSupport() }
     @objc private func openRepository() { model.openRepository() }
+    @objc private func openIssues() { model.openIssues() }
     @objc private func openDesigner() { model.openDesigner() }
 
     private func showSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 880, height: 660), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-            window.title = "UsageMeter"
+            // A hosting controller with sizing options off: a bare hosting view misses the title bar's safe area,
+            // and sizing options would pin the window to the form's ideal height.
+            let controller = NSHostingController(rootView: SettingsView(model: model))
+            controller.sizingOptions = []
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
             window.titlebarAppearsTransparent = true
-            window.center()
+            window.title = "AIUsageMeter Settings"
+            window.subtitle = model.settingsSelection.title
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView(model: model))
+            window.contentMinSize = NSSize(width: 820, height: 560)
+            window.contentViewController = controller
+            controller.view.autoresizingMask = [.width, .height]
+            window.setContentSize(NSSize(width: 900, height: 700))
+            window.setFrameAutosaveName("AIUsageMeterSettings")
+            if !window.setFrameUsingName("AIUsageMeterSettings") { window.center() }
             settingsWindow = window
+            titleObserver = model.$settingsSelection
+                .removeDuplicates()
+                .receive(on: RunLoop.main)
+                .sink { [weak self] selection in self?.settingsWindow?.subtitle = selection.title }
         }
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
+    private func isSettingsEvent(_ window: NSWindow?) -> Bool {
+        guard let settingsWindow, let window else { return false }
+        return window == settingsWindow || window.sheetParent == settingsWindow
+    }
+
     // MARK: - Deterministic capture
 
     private func captureIfRequested() {
-        guard !snapshotCaptured, let path = ProcessInfo.processInfo.environment["USAGEMETER_SNAPSHOT_PATH"] else { return }
-        if ProcessInfo.processInfo.environment["USAGEMETER_SNAPSHOT_TARGET"] == "settings" {
-            guard let view = settingsWindow?.contentView else { return }
+        guard !snapshotCaptured, let path = ProcessInfo.processInfo.environment["AIUSAGEMETER_SNAPSHOT_PATH"] else { return }
+        if ProcessInfo.processInfo.environment["AIUSAGEMETER_SNAPSHOT_TARGET"] == "settings" {
+            // The frame view, not the content view, which runs under the title bar on current macOS.
+            guard let view = settingsWindow?.contentView?.superview ?? settingsWindow?.contentView else { return }
             snapshotCaptured = true
             capture(view: view, path: path, attempt: 0, best: nil, trim: false)
             return
         }
-        guard ProcessInfo.processInfo.environment["USAGEMETER_DEMO_EXPANDED"] != "1" || model.expandedProvider != nil,
+        guard !DemoExpansion.requested().isRequested || model.expandedProvider != nil,
               let view = panel.contentView else { return }
         snapshotCaptured = true
         capture(view: view, path: path, attempt: 0, best: nil, trim: true)
@@ -288,12 +368,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? FileManager.default.createDirectory(at: URL(fileURLWithPath: path).deletingLastPathComponent(), withIntermediateDirectories: true)
                 try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
             }
-            if ProcessInfo.processInfo.environment["USAGEMETER_EXIT_AFTER_SNAPSHOT"] == "1" { NSApp.terminate(nil) }
+            if ProcessInfo.processInfo.environment["AIUSAGEMETER_EXIT_AFTER_SNAPSHOT"] == "1" { NSApp.terminate(nil) }
         }
     }
 }
 
-/// The overlay window is mostly transparent; captures crop to what was drawn.
 enum SnapshotWriter {
     static func png(_ rep: NSBitmapImageRep, trim: Bool) -> (data: Data, score: Int)? {
         var minX = rep.pixelsWide, minY = rep.pixelsHigh, maxX = -1, maxY = -1, score = 0
@@ -318,7 +397,28 @@ enum SnapshotWriter {
     }
 }
 
-/// A miniature of the rail gauge, drawn for the menu bar.
+/// The menu bar gauge is one ring for several subscriptions, so the wording has to say what it averaged.
+enum MenuBarText {
+    /// Nil for a single reading: the row underneath already says the same thing.
+    static func heading(_ summary: UsageSummary) -> String? {
+        guard let average = summary.average, summary.readingCount > 1 else { return nil }
+        var text = "Average \(percent(average)) across \(summary.readingCount) subscriptions"
+        if summary.exhaustedCount > 0 { text += " · \(summary.exhaustedCount) at limit" }
+        return text
+    }
+
+    static func tooltip(_ summary: UsageSummary, snapshots: [ProviderSnapshot]) -> String {
+        guard !snapshots.isEmpty else { return "AIUsageMeter" }
+        var lines: [String] = []
+        if let heading = heading(summary) { lines.append(heading) }
+        if let peak = summary.peak, summary.readingCount > 1 { lines.append("Highest: \(peak.name) \(percent(peak.percent))") }
+        lines += snapshots.map { "\($0.name): \($0.status.isReady ? percent($0.primaryPercent) : $0.status.shortLabel)" }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func percent(_ value: Double) -> String { "\(Int(value.rounded()))%" }
+}
+
 enum StatusGauge {
     static func image(percent: Double?, status: ProviderStatus) -> NSImage {
         let side: CGFloat = 18

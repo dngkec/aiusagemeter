@@ -1,6 +1,6 @@
 import AppKit
 import Combine
-import UsageMeterCore
+import AIUsageMeterCore
 import ServiceManagement
 import SwiftUI
 
@@ -8,13 +8,82 @@ enum SettingsSelection: Hashable {
     case provider(ProviderID)
     case general
     case about
+
+    var title: String {
+        switch self {
+        case .provider(let id): return id.displayName
+        case .general: return "General"
+        case .about: return "About & Support"
+        }
+    }
 }
 
-/// Which of the two support hearts the pointer is on. There can be one in the
-/// rail and one on an open card at the same time, so they are told apart.
+enum SettingsNotice: Equatable {
+    case success(String)
+    case failure(String)
+
+    var text: String {
+        switch self {
+        case .success(let text), .failure(let text): return text
+        }
+    }
+
+    var isFailure: Bool {
+        if case .failure = self { return true }
+        return false
+    }
+
+    var symbol: String { isFailure ? "exclamationmark.triangle.fill" : "checkmark.circle.fill" }
+}
+
+struct ScreenOption: Identifiable, Hashable {
+    let id: String
+    let name: String
+}
+
 enum SupportSurface: Hashable {
     case rail
     case card
+}
+
+/// Everything a reading depends on. Where the gauges sit, which of them the notch shows, and how the
+/// overlay is drawn are not in here: those change what is on screen, never what was read.
+struct FetchInputs: Equatable {
+    let demoData: Bool
+    let providers: [ProviderConfiguration]
+
+    init(_ preferences: AppPreferences) {
+        demoData = preferences.demoData
+        providers = preferences.providers
+            .filter(\.enabled)
+            .map { provider in
+                var fetchable = provider
+                fetchable.showInNotch = true
+                return fetchable
+            }
+            .sorted { $0.id.rawValue < $1.id.rawValue }
+    }
+}
+
+/// Which card a capture wants open. `1` takes the first gauge and a provider identifier takes that
+/// one — which is how a capture checks that a card lands beside its own gauge far down a long rail.
+/// Anything else, `0` included, leaves every card closed.
+enum DemoExpansion {
+    case none
+    case first
+    case provider(ProviderID)
+
+    static func requested(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> DemoExpansion {
+        guard let raw = environment["AIUSAGEMETER_DEMO_EXPANDED"] else { return .none }
+        if raw == "1" { return .first }
+        if let id = ProviderID(rawValue: raw) { return .provider(id) }
+        return .none
+    }
+
+    var isRequested: Bool {
+        if case .none = self { return false }
+        return true
+    }
 }
 
 @MainActor
@@ -28,29 +97,32 @@ final class AppModel: ObservableObject {
     @Published var snapshots: [ProviderSnapshot] = [] {
         didSet { recomputeVisible() }
     }
-    /// What the rail draws, in preferences order. Stored rather than computed
-    /// because every render reads it several times.
+    /// What the rail draws, in preferences order — and what the menu and the menu-bar gauge read.
     @Published private(set) var visibleSnapshots: [ProviderSnapshot] = []
+    /// Which providers the rail draws, kept apart from their readings so animating the rail's shape
+    /// does not mean rebuilding an identifier array on every body pass.
+    @Published private(set) var railKey: [ProviderID] = []
+    /// Measured gauge centres, in panel coordinates. The rail scrolls once the list outgrows the
+    /// screen, so a card's position cannot be derived from the gauge's index alone.
+    @Published private(set) var gaugeCentres: [ProviderID: CGFloat] = [:]
     @Published var expandedProvider: ProviderID?
     @Published var pinnedProvider: ProviderID?
     @Published var refreshing: Set<ProviderID> = []
     @Published var idleMini = false
-    @Published var settingsMessage: String?
+    @Published var settingsNotice: SettingsNotice?
     @Published var liveSecret = ""
     @Published var customSecret = ""
     @Published var settingsSelection: SettingsSelection = .provider(.claude)
     @Published var settingsQuery = ""
-    /// Hover for the support hearts. It lives here rather than in the views
-    /// because this toolchain ships no SwiftUI macro plugin, so `@State` is
-    /// unavailable to the overlay.
+    @Published private(set) var storedSecrets: Set<String> = []
+    @Published private(set) var screens: [ScreenOption] = []
+    @Published private(set) var lastRefresh: Date?
+    /// Hover state lives here because this toolchain ships no SwiftUI macro plugin, so the overlay has no @State.
     @Published var hoveredSupport: SupportSurface?
 
     let store: PreferencesStore
     let secrets: SecretStore
     let coordinator: RefreshCoordinator
-    /// Fires only when the window's frame or the menu-bar contents can have
-    /// changed. Hover is deliberately not one of those: the panel is sized for
-    /// an open card from the start, so opening one moves no window.
     var onPresentationChange: (() -> Void)?
     var onOpenSettings: (() -> Void)?
 
@@ -59,6 +131,12 @@ final class AppModel: ObservableObject {
     private var idleTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var pointer = HoverTracker()
+    /// What the readings on screen were fetched for, so a settings change that invalidates them is
+    /// told apart from one that only moves them around.
+    private var fetched: FetchInputs?
+    /// A demo launch rewrites the provider list in memory to whatever the capture asked for. Saving
+    /// that would replace the real one on disk, so a session holding borrowed preferences never writes.
+    private var borrowedPreferences = false
 
     init(store: PreferencesStore = PreferencesStore(), secrets: SecretStore = KeychainSecretStore(), http: HTTPClient = BoundedHTTPClient(), files: LocalFiles = DiskLocalFiles(), external: ExternalCredentials = SystemExternalCredentials()) {
         self.store = store
@@ -67,10 +145,14 @@ final class AppModel: ObservableObject {
     }
 
     func start() {
+        reloadScreens()
         Task {
             var loaded = await store.load()
-            if ProcessInfo.processInfo.environment["USAGEMETER_DEMO"] == "1" { loaded.demoData = true }
-            if let list = ProcessInfo.processInfo.environment["USAGEMETER_DEMO_PROVIDERS"] {
+            if ProcessInfo.processInfo.environment["AIUSAGEMETER_DEMO"] == "1" {
+                loaded.demoData = true
+                borrowedPreferences = true
+            }
+            if let list = ProcessInfo.processInfo.environment["AIUSAGEMETER_DEMO_PROVIDERS"] {
                 let wanted = Set(list.split(separator: ",").compactMap { ProviderID(rawValue: $0.trimmingCharacters(in: .whitespaces)) })
                 if !wanted.isEmpty {
                     loaded.providers = loaded.providers.map {
@@ -79,18 +161,29 @@ final class AppModel: ObservableObject {
                         provider.showInNotch = true
                         return provider
                     }
+                    borrowedPreferences = true
                 }
             }
             preferences = loaded
             await refresh()
-            if ProcessInfo.processInfo.environment["USAGEMETER_DEMO_EXPANDED"] == "1", let first = visibleSnapshots.first {
-                expandedProvider = first.id
-                pinnedProvider = first.id
+            switch DemoExpansion.requested() {
+            case .none:
+                break
+            case .first:
+                expand(visibleSnapshots.first?.id)
+            case .provider(let id):
+                expand(visibleSnapshots.first { $0.id == id }?.id ?? visibleSnapshots.first?.id)
             }
             beginRefreshLoop()
             scheduleIdle()
             onPresentationChange?()
         }
+    }
+
+    private func expand(_ id: ProviderID?) {
+        guard let id else { return }
+        expandedProvider = id
+        pinnedProvider = id
     }
 
     // MARK: - Derived state
@@ -99,6 +192,18 @@ final class AppModel: ObservableObject {
         let next = ProviderOrdering.arrange(snapshots, by: preferences.providers)
         guard next != visibleSnapshots else { return }
         visibleSnapshots = next
+        let key = next.map(\.id)
+        if key != railKey {
+            railKey = key
+            gaugeCentres = gaugeCentres.filter { key.contains($0.key) }
+        }
+    }
+
+    /// Reported by the rail after layout, so the card follows its gauge even when the rail is scrolled.
+    func recordGaugeCentres(_ centres: [ProviderID: CGFloat]) {
+        guard centres.count != gaugeCentres.count
+            || centres.contains(where: { abs($0.value - (gaugeCentres[$0.key] ?? .infinity)) > 0.5 }) else { return }
+        gaugeCentres = centres
     }
 
     var selectedSnapshot: ProviderSnapshot? {
@@ -106,21 +211,18 @@ final class AppModel: ObservableObject {
         return visibleSnapshots.first { $0.id == id }
     }
 
-    /// Highest reading on show, for the menu-bar gauge.
-    var headline: ProviderSnapshot? {
-        visibleSnapshots.filter { $0.status.isReady }.max { $0.primaryPercent < $1.primaryPercent }
-            ?? visibleSnapshots.first
-    }
+    /// What the menu bar gauge reads: the average across the subscriptions the notch shows.
+    var summary: UsageSummary { UsageSummary(visibleSnapshots) }
 
     func isRefreshing(_ id: ProviderID) -> Bool { refreshing.contains(id) }
 
-    /// The panel is sized once per revealed session so that no window resize
-    /// ever runs underneath a SwiftUI animation.
+    var isRefreshingAny: Bool { !refreshing.isEmpty }
+
+    /// Sized once per revealed session, so no window resize runs underneath an animation.
     var panelHeight: CGFloat {
         let count = max(1, visibleSnapshots.count)
         let spacing = Metrics.itemSpacing(for: count)
         let rail = Metrics.railHeight(count: count, spacing: spacing)
-        // The first gauge sits closest to an edge of the rail, so it sets the reach.
         let reach = max(0, rail / 2 - Metrics.railPadding - Metrics.gauge / 2)
         let card = visibleSnapshots.map(CardMetrics.height(for:)).max() ?? CardMetrics.height(for: ProviderSnapshot(id: .claude))
         return max(rail, 2 * (reach + card / 2)) + 24
@@ -136,14 +238,20 @@ final class AppModel: ObservableObject {
     func refresh() async {
         let enabled = preferences.providers.filter(\.enabled).map(\.id)
         refreshing = Set(enabled)
-        if snapshots.isEmpty {
-            snapshots = enabled.map { ProviderSnapshot(id: $0, status: .loading, message: "Reading usage…") }
+        fetched = FetchInputs(preferences)
+        // A provider enabled in Settings has no reading yet. Standing one in for it now is what puts
+        // its gauge in the rail and its row in the menu straight away, rather than at the end of the fetch.
+        let known = Set(snapshots.map(\.id))
+        let missing = enabled.filter { !known.contains($0) }
+        if !missing.isEmpty {
+            snapshots += missing.map { ProviderSnapshot(id: $0, status: .loading, message: "Reading usage…") }
             onPresentationChange?()
         }
         let value = await coordinator.refresh(preferences: preferences)
         guard !Task.isCancelled else { refreshing = []; return }
         snapshots = value
         refreshing = []
+        lastRefresh = Date()
         onPresentationChange?()
     }
 
@@ -161,47 +269,108 @@ final class AppModel: ObservableObject {
 
     // MARK: - Preferences
 
-    /// Settings apply as they are changed — the rail reads `preferences`
-    /// directly, so a reorder lands on it immediately — and only the write to
-    /// disk is debounced, so a slider drag does not hammer the file.
-    func scheduleSave(refetch: Bool = false) {
+    /// Settings apply as they are made: the rail, the menu, and the menu-bar gauge all read
+    /// `preferences` directly, so this reaches them before the debounced write to disk.
+    ///
+    /// `refetch` defaults to whatever the change calls for — a provider turned on, or any setting a
+    /// reading depends on, is fetched again, so nothing waits on the refresh timer to appear.
+    func scheduleSave(refetch: Bool? = nil) {
         onPresentationChange?()
+        let wanted = refetch ?? (FetchInputs(preferences) != fetched)
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
-            await self?.savePreferences(refetch: refetch)
+            await self?.savePreferences(refetch: wanted)
         }
     }
 
     func savePreferences(refetch: Bool = true) async {
         do {
-            try await store.save(preferences)
-            settingsMessage = nil
+            if !borrowedPreferences { try await store.save(preferences) }
+            if settingsNotice?.isFailure == true { settingsNotice = nil }
             beginRefreshLoop()
             applyLaunchAtLogin()
             onPresentationChange?()
             if refetch { await refresh() }
         } catch {
-            settingsMessage = "Could not save: \(error.localizedDescription)"
+            settingsNotice = .failure("Could not save: \(error.localizedDescription)")
         }
     }
 
+    private func tidied(_ secret: String) -> String {
+        secret.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func saveSecrets(for provider: ProviderID? = nil) {
+        guard let provider else { return }
         do {
-            if let provider, let account = LiveCredential.account(for: provider), !liveSecret.isEmpty {
-                try secrets.write(liveSecret, account: account)
+            var saved = false
+            if let account = LiveCredential.account(for: provider), !tidied(liveSecret).isEmpty {
+                try secrets.write(tidied(liveSecret), account: account)
                 liveSecret = ""
+                saved = true
             }
-            if let provider, !customSecret.isEmpty { try secrets.write(customSecret, account: "custom.\(provider.rawValue)"); customSecret = "" }
-            settingsMessage = "Saved in Keychain"
+            if !tidied(customSecret).isEmpty {
+                try secrets.write(tidied(customSecret), account: Self.customAccount(for: provider))
+                customSecret = ""
+                saved = true
+            }
+            guard saved else { return }
+            loadSecretState(for: provider)
+            settingsNotice = .success("Saved in Keychain")
+            Task { await refresh() }
         } catch {
-            settingsMessage = "Keychain error: \(error.localizedDescription)"
+            settingsNotice = .failure("Keychain error: \(error.localizedDescription)")
         }
+    }
+
+    static func customAccount(for provider: ProviderID) -> String { "custom.\(provider.rawValue)" }
+
+    func removeSecret(account: String, provider: ProviderID) {
+        do {
+            try secrets.write(nil, account: account)
+            loadSecretState(for: provider)
+            settingsNotice = .success("Removed from Keychain")
+            Task { await refresh() }
+        } catch {
+            settingsNotice = .failure("Keychain error: \(error.localizedDescription)")
+        }
+    }
+
+    func hasStoredSecret(_ account: String?) -> Bool {
+        guard let account else { return false }
+        return storedSecrets.contains(account)
+    }
+
+    func loadSecretState(for provider: ProviderID) {
+        var found: Set<String> = []
+        for account in [LiveCredential.account(for: provider), Self.customAccount(for: provider)].compactMap({ $0 }) {
+            if let stored = try? secrets.read(account), !stored.isEmpty { found.insert(account) }
+        }
+        storedSecrets = found
+    }
+
+    /// A typed-but-unsaved secret must not follow the pane change onto another provider.
+    func settingsPaneChanged() {
+        liveSecret = ""
+        customSecret = ""
+        settingsNotice = nil
+        if case .provider(let id) = settingsSelection { loadSecretState(for: id) } else { storedSecrets = [] }
+    }
+
+    func reloadScreens() {
+        screens = NSScreen.screens.map { ScreenOption(id: $0.quotaIdentifier, name: $0.localizedName) }
     }
 
     func moveProvider(_ id: ProviderID, delta: Int) {
         ProviderOrdering.move(id, by: delta, in: &preferences.providers)
+        scheduleSave()
+    }
+
+    func toggleProvider(_ id: ProviderID) {
+        guard let index = preferences.providers.firstIndex(where: { $0.id == id }) else { return }
+        preferences.providers[index].enabled.toggle()
         scheduleSave()
     }
 
@@ -215,7 +384,7 @@ final class AppModel: ObservableObject {
             if preferences.launchAtLogin { try SMAppService.mainApp.register() }
             else if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
         } catch {
-            settingsMessage = "Launch at login unavailable for this build: \(error.localizedDescription)"
+            settingsNotice = .failure("Launch at login unavailable for this build: \(error.localizedDescription)")
         }
     }
 
@@ -226,21 +395,16 @@ final class AppModel: ObservableObject {
         evaluatePointer()
     }
 
-    /// Leaving the rail outright clears anything a missed exit left behind.
     func railHover(_ inside: Bool) {
         pointer.rail(inside)
         evaluatePointer()
     }
 
-    /// Moving onto the card must not dismiss the card.
     func hoverCard(_ inside: Bool) {
         pointer.card(inside)
         evaluatePointer()
     }
 
-    /// The last word on where the pointer is, from the window server rather than
-    /// from SwiftUI. A passive panel never becomes key, so a hover exit can go
-    /// missing; without this a card could be stranded on screen for good.
     func pointerLeftOverlay() {
         guard pointer.holdsOpen else { return }
         pointer.reset()
@@ -304,8 +468,6 @@ final class AppModel: ObservableObject {
         scheduleIdle()
     }
 
-    /// The resting tab and the rail are different window sizes, so coming back
-    /// from one is the one hover transition the window has to hear about.
     private func wakeFromMini() {
         guard idleMini else { return }
         idleMini = false
@@ -331,8 +493,6 @@ final class AppModel: ObservableObject {
 
     // MARK: - Support
 
-    /// The outward links the app offers, all through one door: a support
-    /// surface can name a link, but it cannot invent one.
     func openSupport() { open(SupportLinks.sponsor) }
     func openRepository() { open(SupportLinks.repository) }
     func openIssues() { open(SupportLinks.issues) }
@@ -348,8 +508,6 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    /// Marketing version and build, read from the bundle so the About pane and
-    /// a packaged release can never disagree.
     var versionSummary: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "1.0.0"
