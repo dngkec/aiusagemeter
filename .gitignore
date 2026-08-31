@@ -2,6 +2,10 @@
 .build/
 dist/
 .swiftpm/
+bin/
+obj/
+**/bin/
+**/obj/
 *.xcresult
 AIUsageMeter.xcworkspace/
 

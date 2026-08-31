@@ -25,8 +25,10 @@ upstream project.
 >
 > THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-AIUsageMeter uses only Apple system frameworks at runtime and ships no third-party
-binary dependencies.
+AIUsageMeter uses Apple system frameworks on macOS and Microsoft .NET/WPF plus
+Windows platform APIs on Windows. Release applications ship no third-party
+runtime binary dependencies. The portable test project uses the Microsoft-owned,
+MIT-licensed MSTest SDK; it is not included in release artifacts.
 
 Provider names and the marks drawn beside them identify the services AIUsageMeter
 reads. The marks are original vector drawings built from geometric primitives in

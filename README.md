@@ -3,11 +3,13 @@
 
   <h1>AIUsageMeter</h1>
 
-  <p><strong>A native macOS usage monitor for the AI coding services you pay for.</strong></p>
+  <p><strong>A native macOS and Windows usage monitor for the AI coding services you pay for.</strong></p>
 
   <p>
     <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
+    <img src="https://img.shields.io/badge/Windows-10%202004%2B-0078D4?logo=windows&logoColor=white" alt="Windows 10 2004+">
     <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
+    <img src="https://img.shields.io/badge/.NET-8-512BD4?logo=dotnet&logoColor=white" alt=".NET 8">
     <img src="https://img.shields.io/badge/licence-MIT-0057FC" alt="MIT licence">
     <a href="https://buymeacoffee.com/dngkec"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
   </p>
@@ -15,15 +17,18 @@
   <img src="docs/aiusagemeter-demo.png" width="380" alt="The AIUsageMeter notch with a provider card open">
 </div>
 
-AIUsageMeter shows how much of each AI coding plan or API budget you have used. It draws a black, always-on-top notch on the right edge of a display, one gauge per provider. Hover a gauge to slide out its detail card, click to pin the card, and click away or press Escape to close it. After eight idle seconds the rail shrinks to a slim tab.
+AIUsageMeter shows how much of each AI coding plan or API budget you have used. It draws a black, always-on-top overlay on the right edge of a display, one gauge per provider. The original Swift/AppKit application remains the macOS implementation; Windows uses a separate native .NET 8 WPF application with the same portable models, parser behaviour, security limits, and preferences concepts.
 
-The app is an `LSUIElement` accessory, so it has no Dock icon, and hovering the notch does not activate or focus it. A menu-bar gauge carries Refresh Now, Hide/Show Notch, Settings, the support links, and Quit.
+On macOS the app is an `LSUIElement` accessory, so it has no Dock icon, and hovering the notch does not activate or focus it. A menu-bar gauge carries Refresh Now, Hide/Show Notch, Settings, the support links, and Quit.
 
-Provider access is read-only, secrets the app owns are kept in the Keychain, and there are no third-party runtime dependencies.
+Provider access is read-only. App-owned secrets use macOS Keychain or Windows Credential Manager, and release applications have no third-party runtime dependency.
 
 ## Install
 
-Download `AIUsageMeter-<version>.dmg` from [Releases](https://github.com/dngkec/aiusagemeter/releases), open it, and drag **AIUsageMeter** into **Applications**.
+Download the platform asset from [Releases](https://github.com/dngkec/aiusagemeter/releases):
+
+- **macOS:** open `AIUsageMeter-<version>.dmg` and drag **AIUsageMeter** into **Applications**.
+- **Windows:** download `AIUsageMeter-<version>-win-x64.zip` or `win-arm64.zip`, extract it to a permanent folder, and run `AIUsageMeter.exe`. The archive is self-contained; a separate .NET installation is not required. Current Windows artifacts are unsigned, so SmartScreen may ask you to confirm the first launch.
 
 AIUsageMeter is ad-hoc signed rather than notarised, so macOS refuses to open it on a first double-click. Right-click **AIUsageMeter.app** in Applications, choose **Open**, and confirm once; every launch after that is normal. From the terminal:
 
@@ -31,11 +36,11 @@ AIUsageMeter is ad-hoc signed rather than notarised, so macOS refuses to open it
 xattr -dr com.apple.quarantine /Applications/AIUsageMeter.app
 ```
 
-There is no Dock icon. Look for the gauge in the menu bar and the notch on the right edge of your display.
+There is no Dock icon on macOS. On either platform, look for AIUsageMeter in the menu-bar/status-tray area and at the right edge of your display.
 
 ## Build from source
 
-Requirements: macOS 14 or newer, and either Xcode or the Apple Command Line Tools with Swift 6. `Package.swift` detects which toolchain is selected.
+For macOS, use macOS 14 or newer with Xcode or the Apple Command Line Tools and Swift 6:
 
 ```sh
 ./scripts/build-app.sh          # dist/AIUsageMeter.app
@@ -45,6 +50,17 @@ open dist/AIUsageMeter.app
 ```
 
 Build products stay under `.build/`; the packaged, ad-hoc-signed app is written to `dist/AIUsageMeter.app`. `make-dmg.sh` turns that into a drag-to-Applications disk image with a laid-out window, a background, and a volume icon; pass `--no-build` to package an app bundle you already have. The Finder arrangement is best-effort — on a machine that denies Finder automation, usually CI, the image is still produced and valid, just not laid out.
+
+For Windows, install the .NET 8 SDK and Visual Studio 2022 Build Tools with the .NET desktop workload, or use the `windows-latest` CI job:
+
+```powershell
+dotnet restore AIUsageMeter.Windows.sln
+dotnet test WindowsTests/AIUsageMeter.Core.Tests -c Release
+dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj -c Release -r win-x64
+./scripts/package-windows.ps1 -Runtime win-x64
+```
+
+`package-windows.ps1` publishes a self-contained single-file WPF application, creates the release ZIP, and writes its SHA-256 checksum under `dist/`. Both x64 and Arm64 are produced for tagged releases.
 
 To launch with deterministic demo data and the first card expanded:
 
@@ -89,6 +105,8 @@ Park the pointer away from the overlay before a notch capture. The panel is live
 
 Open Settings with `⌘,` from the menu-bar menu or the app menu. The title bar names the window and the pane on screen, and the window's size and position are remembered between launches. Changes apply as you make them — there is nothing to save. Only the write to disk is debounced, and a change that alters a reading refetches it, so the rail and the menu-bar gauge never wait on the refresh timer.
 
+On Windows, open Settings from the notification-area menu. The WPF settings window uses an explicit Save button, exposes the same provider modes and placement controls, and writes launch-at-login under the current user's standard `Run` key. Clicking an overlay gauge expands its detail rows; leaving the overlay collapses them. The notification-area menu provides refresh, show/hide, provider summaries, support links, Settings, and Quit.
+
 The sidebar lists **General**, **About & Support**, and every provider in the catalog with its current reading, or `Off` when it is disabled. Search filters the list. Drag a provider to reorder the rail, or use the right-click menu to enable, disable, or move it. Reordering is offered only when the search field is empty.
 
 A provider pane holds:
@@ -96,7 +114,7 @@ A provider pane holds:
 - The reason it is not reading, when it is not — expired credential, rate limit, setup needed — beside the provider's own setup note.
 - **Rail**: enable the provider, show or hide it in the notch, and move its position with the arrows under **Position in the rail**.
 - **Data source**: Built-in, Custom JSON, or Manual budget.
-- For a built-in source that needs a key: the monthly budget, a team or workspace ID, a region where the service has one, and the key field itself. The pane says whether a secret is already saved, and offers Save and Remove. A key is written straight to the Keychain; a typed but unsaved key is discarded when you leave the pane.
+- For a built-in source that needs a key: the monthly budget, a team or workspace ID, a region where the service has one, and the key field itself. App-owned keys are written to Keychain on macOS and Windows Credential Manager on Windows, never to preferences.
 
 <p align="center">
   <img src="docs/aiusagemeter-settings.png" width="720" alt="The Claude Code provider pane in Settings">
@@ -135,6 +153,8 @@ The overlay window is sized once per revealed session. It grows before a panel o
 
 ## Provider support
 
+The table describes the full macOS implementation. Windows currently provides built-in live connectors for Claude Code, Codex, Grok, GitHub Copilot, Gemini Code Assist, Kimi Code, Anthropic API, OpenAI API, OpenRouter, DeepSeek, Mistral, xAI Platform, Moonshot, Z.ai, and OpenCode. It discovers the corresponding CLI files read-only at `%USERPROFILE%\.claude\.credentials.json`, `.codex\auth.json`, `.grok\auth.json`, `.gemini\oauth_creds.json`, and `.kimi-code\credentials\kimi-code.json`; Copilot checks `.config\github-copilot`, `%APPDATA%\github-copilot`, `.config\gh\hosts.yml`, and `%APPDATA%\GitHub CLI\hosts.yml`. Cursor is explicitly unavailable on Windows because its credential is in `%APPDATA%\Cursor\User\globalStorage\state.vscdb` and AIUsageMeter does not ship or invoke a SQLite reader. JetBrains AI and Warp are also reported as unavailable rather than silently returning demo data. Every provider still supports Custom JSON and Manual Budget on Windows.
+
 | Provider | Built-in live source | Credential behaviour |
 |---|---|---|
 | Claude Code | `GET api.anthropic.com/api/oauth/usage` | Reads the Claude Code Keychain item or `~/.claude/.credentials.json`; never refreshes or rewrites it. Extra usage is shown only when the account has it enabled. |
@@ -158,7 +178,7 @@ The overlay window is sized once per revealed session. It grows before a panel o
 
 Perplexity, Windsurf, Ollama/LM Studio, Amp, Kilo, Augment, Devin, Antigravity, and Custom are in the catalog without a built-in source. AIUsageMeter does not guess at undocumented private APIs: a service that publishes usage only to its own web app is left to Custom JSON rather than importing browser cookies. Every catalog entry supports:
 
-- **Custom JSON**: GET or POST, HTTPS only (localhost HTTP is permitted), an optional bearer or API-key header secret in the Keychain, dot-separated JSON paths for percentage or used/limit/reset, and an optional dashboard URL. Extra usage and credits appear when the payload includes them.
+- **Custom JSON**: GET or POST, HTTPS only (localhost HTTP is permitted), an optional bearer or API-key header secret in the platform credential vault, dot-separated JSON paths for percentage or used/limit/reset, and an optional dashboard URL. Extra usage and credits appear when the payload includes them.
 - **Manual budget**: explicit used, limit, and reset date.
 
 Demo data is deterministic and labelled `DEMO DATA`. It is never substituted for a failed live reading.
@@ -166,27 +186,34 @@ Demo data is deterministic and labelled `DEMO DATA`. It is never substituted for
 ## Privacy and security
 
 - Provider access is read-only. AIUsageMeter does not refresh or rotate shared CLI OAuth tokens.
-- Secrets the app owns are stored in the macOS Keychain, never in the preferences file or a log.
-- Preferences are an atomic JSON file at `~/Library/Application Support/AIUsageMeter/preferences.json`. It holds configuration and no secrets.
-- Requests use an ephemeral `URLSession`, system TLS defaults, 15-second request and 25-second resource timeouts, explicit endpoints, and a 1–2 MB response cap.
+- Secrets the app owns are stored in macOS Keychain or Windows Credential Manager under `AIUsageMeter/*`, never in the preferences file or a log.
+- Preferences are an atomic JSON file at `~/Library/Application Support/AIUsageMeter/preferences.json` on macOS or `%LOCALAPPDATA%\AIUsageMeter\preferences.json` on Windows. It holds configuration and no secrets.
+- Requests use platform HTTP stacks with system TLS, no cookie store, 15-second connection/request and 25-second total timeouts, redirects disabled on Windows, explicit endpoints, and a 1–2 MB streaming response cap.
 - Refreshes run concurrently and are cancellable. A failure is isolated to its own provider.
 - Credentials and provider response bodies are never printed.
 - There are no Node or Python runtime dependencies and no third-party runtime frameworks.
 
-Reading a discovered credential can raise a normal macOS Keychain prompt. Denying it leaves that provider in Setup Needed without affecting the others.
+Reading a discovered credential can raise a normal macOS Keychain prompt. On Windows, shared CLI files are only opened read-only with bounded size and are never rewritten. A denied or unavailable credential leaves that provider in Setup Needed without affecting the others.
 
 ## Verifying a build
 
 ```sh
 swift build -c release
 ./scripts/build-app.sh
+dotnet test WindowsTests/AIUsageMeter.Core.Tests -c Release
+dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj -c Release -r win-x64
 ```
 
 The release build is compiled with `-warnings-as-errors`, and the packaging script lints the bundle's `Info.plist` and verifies its signature with `codesign --deep --strict`.
 
-Parsers, preferences and their migration, URL policy, connector modes, overlay geometry, bounded network failures, and concurrent refresh isolation are covered by a fixture-backed suite kept in the maintainer's working copy rather than published here. `Package.swift` declares the test target only when `Tests/` is present, so this repository builds and packages without it.
+The published .NET test project covers representative parsers, preferences migration, URL policy, overlay geometry, bounded network failures, and demo labelling. The more extensive Swift fixture suite remains in the maintainer's working copy; `Package.swift` declares it only when `Tests/` is present. Windows CI is authoritative for runtime-target compilation and packaging. A macOS cross-build validates C# and WPF markup but is not a Windows runtime test.
 
 ## Troubleshooting
+
+- **Windows Setup Needed:** open the named CLI and sign in, then Refresh. AIUsageMeter checks only the bounded, read-only paths listed under Provider support; it does not search browser data or refresh a CLI token.
+- **Windows overlay on the wrong display:** choose a connected display in Settings. If a saved display is disconnected, the Windows app safely falls back to the display containing the pointer.
+- **Windows launch at login starts the wrong copy:** disable launch at login, move the extracted release folder to its permanent location, reopen it, and enable the option again.
+- **Windows SmartScreen:** release ZIPs are currently unsigned. Verify the SHA-256 file shipped beside the ZIP before confirming the first launch.
 
 - **Setup Needed:** open the provider's CLI or app and sign in, then Refresh. For a catalog-only provider, choose Custom JSON or Manual budget.
 - **Expired Gemini or Kimi:** reopen the corresponding CLI. AIUsageMeter will not refresh a token it does not own.

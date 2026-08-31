@@ -16,10 +16,10 @@ body:
     validations:
       required: true
   - type: input
-    id: macos
+    id: os
     attributes:
-      label: macOS version
-      placeholder: "14.6"
+      label: Operating system and version
+      placeholder: "macOS 14.6 or Windows 11 24H2"
     validations:
       required: true
   - type: dropdown

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
   workflow_dispatch:
 
@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test and package
+  macos:
+    name: macOS build and package
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -38,4 +38,36 @@ jobs:
         with:
           name: AIUsageMeter-dmg
           path: dist/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows build, test, and package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore AIUsageMeter.Windows.sln
+
+      - name: Test portable logic
+        run: dotnet test WindowsTests/AIUsageMeter.Core.Tests/AIUsageMeter.Core.Tests.csproj --configuration Release --no-restore
+
+      - name: Build WPF application
+        run: dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj --configuration Release --runtime win-x64 --no-restore
+
+      - name: Package self-contained application
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -Runtime win-x64
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIUsageMeter-windows
+          path: |
+            dist/*-win-x64.zip
+            dist/SHA256SUMS-windows-win-x64.txt
           if-no-files-found: error
