@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build and publish the disk image
+  build-macos:
+    name: Build macOS disk image
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -24,19 +24,70 @@ jobs:
       - name: Checksum
         run: |
           cd dist
-          shasum -a 256 *.dmg | tee SHA256SUMS.txt
+          shasum -a 256 *.dmg | tee SHA256SUMS-macos.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS-macos.txt
+
+  build-windows:
+    name: Build Windows packages
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        shell: pwsh
+        run: ./scripts/test-windows.ps1 -Configuration Release
+
+      - name: Package self-contained application
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref_name }}"
+          $version = if ($ref.StartsWith("v")) { $ref.Substring(1) } else { "1.1.0" }
+          ./scripts/package-windows.ps1 -Runtime ${{ matrix.runtime }} -Version $version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.runtime }}
+          path: |
+            dist/*-${{ matrix.runtime }}.zip
+            dist/SHA256SUMS-windows-${{ matrix.runtime }}.txt
+
+  release:
+    name: Publish release assets
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.dmg
-            dist/SHA256SUMS.txt
+            dist/*.zip
+            dist/SHA256SUMS-*.txt
           generate_release_notes: true
           body: |
-            AIUsageMeter is ad-hoc signed rather than notarised, so the first launch
-            needs Finder: right-click **AIUsageMeter.app** and choose **Open**, then
-            confirm. Everything after that opens normally.
+            macOS: AIUsageMeter is ad-hoc signed rather than notarised, so the first
+            launch needs Finder: right-click **AIUsageMeter.app**, choose **Open**, and
+            confirm. Windows: download the archive matching your CPU, extract it, and
+            run **AIUsageMeter.exe**. Windows builds are self-contained and unsigned.
 
             If you find AIUsageMeter useful, you can
             [buy me a coffee](https://buymeacoffee.com/dngkec).

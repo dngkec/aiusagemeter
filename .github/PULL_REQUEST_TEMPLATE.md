@@ -10,6 +10,7 @@
 ## Checklist
 
 - [ ] `./scripts/build-app.sh` succeeds with no new warnings
+- [ ] `pwsh ./scripts/test-windows.ps1` and the WPF build succeed for Windows changes
 - [ ] If a provider was added or changed, a **redacted** sample response is included
 - [ ] No credential, token, or provider response body is written to a log
 - [ ] Docs updated if behaviour or setup changed

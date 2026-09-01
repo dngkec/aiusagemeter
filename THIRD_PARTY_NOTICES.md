@@ -8,6 +8,20 @@ pointer, and the app icon in `Resources/icons` — is inspired by the work of
 the design language they follow is theirs. If you fork or redistribute
 AIUsageMeter, please keep that credit intact.
 
+## Fonts
+
+The Windows build embeds the **Inter** typeface (version 4.1), copyright ©
+2016 The Inter Project Authors, licensed under the SIL Open Font License 1.1.
+The four static instances shipped — Regular, Medium, SemiBold and Bold — live in
+`src/AIUsageMeter.Windows/Assets/Fonts`, alongside the full licence text in
+`LICENSE.txt`.
+
+Inter stands in for SF Pro, which Apple does not license for redistribution.
+The macOS build uses the system font and embeds nothing.
+
+Windows itself supplies Segoe Fluent Icons, and Segoe MDL2 Assets on Windows 10.
+Neither is redistributed; both are read from the operating system.
+
 ## Code
 
 AIUsageMeter is an original implementation. Endpoint-shape research and product
@@ -25,8 +39,10 @@ upstream project.
 >
 > THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-AIUsageMeter uses only Apple system frameworks at runtime and ships no third-party
-binary dependencies.
+AIUsageMeter uses Apple system frameworks on macOS and Microsoft .NET/WPF plus
+Windows platform APIs on Windows. Release applications ship no third-party
+runtime binary dependencies. The portable test project uses the Microsoft-owned,
+MIT-licensed MSTest SDK; it is not included in release artifacts.
 
 Provider names and the marks drawn beside them identify the services AIUsageMeter
 reads. The marks are original vector drawings built from geometric primitives in

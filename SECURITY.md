@@ -1,8 +1,8 @@
 # Security policy
 
 AIUsageMeter reads credentials that belong to other applications and stores its own
-in the macOS Keychain, so anything touching those is treated as a security issue
-rather than a bug.
+in macOS Keychain or Windows Credential Manager, so anything touching those is
+treated as a security issue rather than a bug.
 
 ## Reporting
 
@@ -18,22 +18,26 @@ You can expect an acknowledgement within a week.
 - Provider access is read-only. AIUsageMeter never refreshes, rotates, or rewrites
   a credential another application owns.
 - Secrets the app owns go in its own Keychain item
-  (`app.aiusagemeter.AIUsageMeter`), never into preferences and never into a log.
+  (`app.aiusagemeter.AIUsageMeter`) or Windows Credential Manager target
+  (`AIUsageMeter/*`), never into preferences and never into a log.
 - Preferences live in a plain JSON file at
-  `~/Library/Application Support/AIUsageMeter/preferences.json` and contain
+  `~/Library/Application Support/AIUsageMeter/preferences.json` on macOS or
+  `%LOCALAPPDATA%\AIUsageMeter\preferences.json` on Windows and contain
   configuration only.
-- Requests use an ephemeral `URLSession`, system TLS defaults, explicit
-  endpoints, 15-second request and 25-second resource timeouts, and a response
-  size cap.
+- Requests use system TLS, no browser-cookie import or HTTP cookie store,
+  explicit endpoints, strict timeouts, and a 1–2 MB streaming response cap.
+  Custom HTTP is limited to localhost; other endpoints require HTTPS. Windows
+  redirects are disabled so authorization headers cannot cross hosts.
 - Credentials and provider response bodies are never printed.
-- The only outward links the app can open are the four in
-  `Sources/AIUsageMeterCore/Support.swift`, and it checks a URL against that list
-  before opening it.
-- There are no third-party runtime dependencies.
+- Support links are allowlisted in the platform core. Provider dashboards are
+  hard-coded with their connector or, for Custom JSON, explicitly configured by
+  the user and validated by the same HTTPS/localhost policy.
+- Shared Windows CLI credential files are opened read-only and bounded to 2 MB.
+- There are no third-party runtime dependencies in either release application.
 
 ## Scope
 
-In scope: credential handling, Keychain use, the URL policy, the file reads that
+In scope: credential handling, Keychain/Credential Manager use, the URL policy, the file reads that
 discover other applications' credentials, and anything that could send provider
 data somewhere it should not go.
 
