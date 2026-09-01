@@ -85,12 +85,15 @@ jobs:
             dist/*.dmg
             dist/*-setup.exe
             dist/SHA256SUMS-*.txt
+          # Notes for the release itself are written by hand after the build. This body is
+          # only the standing install note, so a rebuild of an existing tag does not
+          # overwrite the changelog with boilerplate.
           generate_release_notes: true
           body: |
-            macOS: AIUsageMeter is ad-hoc signed rather than notarised, so the first
-            launch needs Finder: right-click **AIUsageMeter.app**, choose **Open**, and
-            confirm. Windows: download the archive matching your CPU, extract it, and
-            run **AIUsageMeter.exe**. Windows builds are self-contained and unsigned.
+            macOS: the app is ad-hoc signed rather than notarised, so the first launch
+            needs Finder: right-click **AIUsageMeter.app**, choose **Open**, and confirm.
+            Windows: run the installer matching your CPU. It installs for the current
+            user and needs no administrator rights. Both builds are unsigned.
 
             If you find AIUsageMeter useful, you can
             [buy me a coffee](https://buymeacoffee.com/dngkec).
