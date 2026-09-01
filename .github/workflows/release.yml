@@ -50,6 +50,9 @@ jobs:
         shell: pwsh
         run: ./scripts/test-windows.ps1 -Configuration Release
 
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
       - name: Package self-contained application
         shell: pwsh
         run: |
@@ -61,7 +64,7 @@ jobs:
         with:
           name: release-${{ matrix.runtime }}
           path: |
-            dist/*-${{ matrix.runtime }}.zip
+            dist/*-${{ matrix.runtime }}-setup.exe
             dist/SHA256SUMS-windows-${{ matrix.runtime }}.txt
 
   release:
@@ -80,7 +83,7 @@ jobs:
         with:
           files: |
             dist/*.dmg
-            dist/*.zip
+            dist/*-setup.exe
             dist/SHA256SUMS-*.txt
           generate_release_notes: true
           body: |

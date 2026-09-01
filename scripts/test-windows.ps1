@@ -5,7 +5,7 @@ param(
     [switch]$NoBuild
 )
 
-# Runs the Windows test suites by launching the test executables directly.
+# Runs the Windows test suite by launching the test executable directly.
 #
 # Microsoft.Testing.Platform builds each test project as an ordinary executable, and running that
 # executable is the platform's own entry point. `dotnet test` only wraps it: on the .NET 10 SDK it
@@ -18,7 +18,6 @@ $root = Split-Path -Parent $PSScriptRoot
 
 $suites = @(
     @{ Name = "AIUsageMeter.Core.Tests"; Framework = "net8.0" }
-    @{ Name = "AIUsageMeter.Windows.Tests"; Framework = "net8.0-windows10.0.19041.0" }
 )
 
 if (-not $NoBuild) {

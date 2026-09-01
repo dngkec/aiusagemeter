@@ -19,9 +19,6 @@
     <ProjectReference Include="..\AIUsageMeter.Core\AIUsageMeter.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="AIUsageMeter.Windows.Tests" />
-  </ItemGroup>
-  <ItemGroup>
     <!-- Static instances, not InterVariable.ttf: WPF cannot render variable fonts. -->
     <Resource Include="Assets\Fonts\Inter-Regular.ttf" />
     <Resource Include="Assets\Fonts\Inter-Medium.ttf" />

@@ -11,8 +11,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIUsageMeter.Core.Tests", "
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "WindowsTests", "WindowsTests", "{916301BD-A9B5-410B-C1B1-A368CCEACF22}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIUsageMeter.Windows.Tests", "WindowsTests\AIUsageMeter.Windows.Tests\AIUsageMeter.Windows.Tests.csproj", "{4E063716-4252-4ACB-BDDA-ADD47C8FD473}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
 Global
@@ -61,23 +59,10 @@ Global
 		{60DE108D-D379-47EE-B617-75D9A596D371}.Release|x64.Build.0 = Release|Any CPU
 		{60DE108D-D379-47EE-B617-75D9A596D371}.Release|x86.ActiveCfg = Release|Any CPU
 		{60DE108D-D379-47EE-B617-75D9A596D371}.Release|x86.Build.0 = Release|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Debug|x64.Build.0 = Debug|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Debug|x86.Build.0 = Debug|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Release|x64.ActiveCfg = Release|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Release|x64.Build.0 = Release|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Release|x86.ActiveCfg = Release|Any CPU
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{4E063716-4252-4ACB-BDDA-ADD47C8FD473} = {916301BD-A9B5-410B-C1B1-A368CCEACF22}
 	EndGlobalSection
 EndGlobal

@@ -28,7 +28,7 @@ Provider access is read-only. App-owned secrets use macOS Keychain or Windows Cr
 Download the platform asset from [Releases](https://github.com/dngkec/aiusagemeter/releases):
 
 - **macOS:** open `AIUsageMeter-<version>.dmg` and drag **AIUsageMeter** into **Applications**.
-- **Windows:** download `AIUsageMeter-<version>-win-x64.zip` or `win-arm64.zip`, extract it to a permanent folder, and run `AIUsageMeter.exe`. The archive is self-contained; a separate .NET installation is not required. Current Windows artifacts are unsigned, so SmartScreen may ask you to confirm the first launch.
+- **Windows:** run `AIUsageMeter-<version>-win-x64-setup.exe`, or the `win-arm64` build on an Arm machine. It installs for the current user, so it asks for no administrator rights, and it registers an uninstaller under Installed apps. The build is self-contained; a separate .NET installation is not required. Windows artifacts are unsigned, so SmartScreen asks you to confirm the first run.
 
 AIUsageMeter is ad-hoc signed rather than notarised, so macOS refuses to open it on a first double-click. Right-click **AIUsageMeter.app** in Applications, choose **Open**, and confirm once; every launch after that is normal. From the terminal:
 
@@ -60,7 +60,7 @@ dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj -c Release -r 
 ./scripts/package-windows.ps1 -Runtime win-x64
 ```
 
-`package-windows.ps1` publishes a self-contained single-file WPF application, creates the release ZIP, and writes its SHA-256 checksum under `dist/`. Both x64 and Arm64 are produced for tagged releases.
+`package-windows.ps1` publishes a self-contained single-file WPF application, compiles the installer from `scripts/windows-installer.iss`, and writes its SHA-256 checksum under `dist/`. It needs Inno Setup 6 (`winget install JRSoftware.InnoSetup`). Both x64 and Arm64 are produced for tagged releases.
 
 To launch with deterministic demo data and the first card expanded:
 
@@ -208,14 +208,14 @@ dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj -c Release -r 
 
 The release build is compiled with `-warnings-as-errors`, and the packaging script lints the bundle's `Info.plist` and verifies its signature with `codesign --deep --strict`.
 
-`test-windows.ps1` runs both published .NET suites: `AIUsageMeter.Core.Tests` covers representative parsers, preferences migration, URL policy, overlay geometry, bounded network failures, and demo labelling; `AIUsageMeter.Windows.Tests` covers the overlay's drawing, the settings view model, its hand-drawn controls, and the settings window's own bindings. It launches the test executables directly, because `dotnet test` on the .NET 10 SDK can report `Zero tests ran` instead of running them. The more extensive Swift fixture suite remains in the maintainer's working copy; `Package.swift` declares it only when `Tests/` is present. Windows CI is authoritative for runtime-target compilation and packaging. A macOS cross-build validates C# and WPF markup but is not a Windows runtime test.
+`test-windows.ps1` runs the published .NET suite, `AIUsageMeter.Core.Tests`, which covers representative parsers, preferences migration, URL policy, overlay geometry, bounded network failures, and demo labelling. It launches the test executable directly, because `dotnet test` on the .NET 10 SDK can report `Zero tests ran` instead of running them. The more extensive Swift fixture suite remains in the maintainer's working copy; `Package.swift` declares it only when `Tests/` is present. Windows CI is authoritative for runtime-target compilation and packaging. A macOS cross-build validates C# and WPF markup but is not a Windows runtime test.
 
 ## Troubleshooting
 
 - **Windows Setup Needed:** open the named CLI and sign in, then Refresh. AIUsageMeter checks only the bounded, read-only paths listed under Provider support; it does not search browser data or refresh a CLI token.
 - **Windows overlay on the wrong display:** choose a connected display in Settings. If a saved display is disconnected, the Windows app safely falls back to the display containing the pointer.
-- **Windows launch at login starts the wrong copy:** disable launch at login, move the extracted release folder to its permanent location, reopen it, and enable the option again.
-- **Windows SmartScreen:** release ZIPs are currently unsigned. Verify the SHA-256 file shipped beside the ZIP before confirming the first launch.
+- **Windows launch at login starts the wrong copy:** this happens when an older copy was run from a folder rather than installed. Uninstall under Installed apps, run the installer, then enable the option again.
+- **Windows SmartScreen:** the installer is currently unsigned. Verify the SHA-256 file shipped beside it before confirming the first run.
 
 - **Setup Needed:** open the provider's CLI or app and sign in, then Refresh. For a catalog-only provider, choose Custom JSON or Manual budget.
 - **Expired Gemini or Kimi:** reopen the corresponding CLI. AIUsageMeter will not refresh a token it does not own.

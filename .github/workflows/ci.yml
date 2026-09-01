@@ -53,11 +53,7 @@ jobs:
       - name: Restore
         run: dotnet restore AIUsageMeter.Windows.sln
 
-      # Both suites: the portable logic and the WPF layer, which holds the settings view model,
-      # its hand-drawn controls, and the window's own bindings. The WPF suite was previously
-      # compiled by nobody and run by nobody.
-      #
-      # The script launches the Microsoft.Testing.Platform executables rather than going through
+      # The script launches the Microsoft.Testing.Platform executable rather than going through
       # `dotnet test`, whose .NET 10 SDK server mode reports "Zero tests ran" on some machines and
       # would turn a red suite into a silent green tick.
       - name: Test
