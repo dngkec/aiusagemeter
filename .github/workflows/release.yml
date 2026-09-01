@@ -46,14 +46,15 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Test portable logic
-        run: dotnet test WindowsTests/AIUsageMeter.Core.Tests/AIUsageMeter.Core.Tests.csproj --configuration Release
+      - name: Test
+        shell: pwsh
+        run: ./scripts/test-windows.ps1 -Configuration Release
 
       - name: Package self-contained application
         shell: pwsh
         run: |
           $ref = "${{ github.ref_name }}"
-          $version = if ($ref.StartsWith("v")) { $ref.Substring(1) } else { "1.0.0" }
+          $version = if ($ref.StartsWith("v")) { $ref.Substring(1) } else { "1.1.0" }
           ./scripts/package-windows.ps1 -Runtime ${{ matrix.runtime }} -Version $version
 
       - uses: actions/upload-artifact@v4

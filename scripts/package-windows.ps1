@@ -1,7 +1,7 @@
 param(
     [ValidateSet("win-x64", "win-arm64")]
     [string]$Runtime = "win-x64",
-    [string]$Version = "1.0.0",
+    [string]$Version = "1.1.0",
     [switch]$NoBuild
 )
 

@@ -36,7 +36,7 @@ public sealed class SecurityAndCoordinatorTests
         var migrated = PreferencesMigration.Migrate(input);
         Assert.AreEqual(ProviderInfo.All.Length, migrated.Providers.Count);
         Assert.AreEqual(30d, migrated.RefreshIntervalSeconds);
-        Assert.AreEqual(2_000d, migrated.VerticalOffset);
+        Assert.AreEqual(OverlayOffset.Max, migrated.VerticalOffset);
     }
 
     [TestMethod]

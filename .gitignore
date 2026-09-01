@@ -21,19 +21,96 @@ TEST_REPORT.md
 # Source artwork that neither the app nor the README uses.
 Resources/icons/AIUsageMeter.svg
 
-# Local AI-agent configuration and instructions. These files may contain
-# machine-specific context and must not become part of the product repository.
+# Local AI-agent configuration, transcripts, specs, plans, canvases, and
+# tool state. None of this belongs in the product repository.
+.superpowers/
+docs/superpowers/
+docs/brainstorm/
+docs/ai/
+docs/agent/
+docs/agents/
+docs/specs/
+.brainstorm/
+.interface-design/
 .agents/
+.agent/
+.agent-transcripts/
+agent-transcripts/
 .aider/
+.aider*
 .claude/
+.claude-mem/
+.clinerules
+.clinerules/
 .cline/
 .codex/
+.codex-rescue/
 .continue/
 .cursor/
 .gemini/
-.github/instructions/
+.grok/
+.goose/
+.opencode/
+.factory/
+.crush/
+.kilocode/
+.augment/
+.trae/
+.amp/
+.openai/
+.anthropic/
+.devin/
+.bolt/
+.tabnine/
 .roo/
 .windsurf/
+.pi/
+.serena/
+.specify/
+.taskmaster/
+.kiro/
+.amazonq/
+.qodo/
+.junie/
+.sweagent/
+.swe-agent/
+.agentmemory/
+.memory/
+.ai/
+.skills/
+.prompts/
+.canvas/
+.hyperframes/
+.worktrees/
+.gitworktrees/
+.mcp.json
+mcp.json
+.vscode/mcp.json
+.vscode/*.mcp.json
+llms.txt
+.llms.txt
+.cursorrules
+.cursorignore
+.aiignore
+.aiexclude
+.github/instructions/
+.github/prompts/
+.github/agents/
+.github/chatmodes/
+.github/skills/
+.github/copilot-instructions.md
+.github/copilot/
+.vscode/*copilot*
+copilot-instructions.md
+AGENTS.toml
+AGENTS.yml
+AGENTS.yaml
+*.canvas.tsx
+*.canvas.ts
+*.prompt.md
+*.chatmode.md
+*.agent.md
+*.instructions.md
 *[Aa][Gg][Ee][Nn][Tt]*.[Mm][Dd]
 *[Aa][Ii][Dd][Ee][Rr]*.[Mm][Dd]
 *[Cc][Ll][Aa][Uu][Dd][Ee]*.[Mm][Dd]
@@ -42,9 +119,12 @@ Resources/icons/AIUsageMeter.svg
 *[Cc][Oo][Pp][Ii][Ll][Oo][Tt]*.[Mm][Dd]
 *[Cc][Uu][Rr][Ss][Oo][Rr]*.[Mm][Dd]
 *[Gg][Ee][Mm][Ii][Nn][Ii]*.[Mm][Dd]
-*[Jj][Uu][Ll][Ee][Ss]*.[Mm][Dd]
+*[Gg][Rr][Oo][Kk]*.[Mm][Dd]
+*[Jj][Uu][Ll][Ee]*.[Mm][Dd]
 *[Qq][Ww][Ee][Nn]*.[Mm][Dd]
 *[Ww][Ii][Nn][Dd][Ss][Uu][Rr][Ff]*.[Mm][Dd]
+*[Ss][Kk][Ii][Ll][Ll]*.[Mm][Dd]
+*[Ss][Pp][Ee][Cc]*.[Mm][Dd]
 
 # Internal engineering documents. Product/public documentation (README,
 # SECURITY, CONTRIBUTING, release notes, and user docs) remains trackable.

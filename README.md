@@ -55,7 +55,7 @@ For Windows, install the .NET 8 SDK and Visual Studio 2022 Build Tools with the 
 
 ```powershell
 dotnet restore AIUsageMeter.Windows.sln
-dotnet test WindowsTests/AIUsageMeter.Core.Tests -c Release
+./scripts/test-windows.ps1 -Configuration Release
 dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj -c Release -r win-x64
 ./scripts/package-windows.ps1 -Runtime win-x64
 ```
@@ -101,11 +101,13 @@ Park the pointer away from the overlay before a notch capture. The panel is live
 - A heart sits at the foot of the rail and on every card. It opens Buy Me a Coffee in a browser and does nothing else.
 - Reduce Motion is respected: transitions cross-fade and the refresh sweep becomes a dimmed arc. The notch stays black in both system appearances; Settings follows the system.
 
+The Windows overlay behaves the same way, down to the spring the panel opens on. Read the notes above with two substitutions: the menu-bar gauge is a notification-area icon, and Reduce Motion is Windows' own "show animations" setting. Where macOS draws the rail in AppKit, Windows draws it in WPF from the same measurements, so the two look alike rather than merely similar.
+
 ## Settings
 
 Open Settings with `⌘,` from the menu-bar menu or the app menu. The title bar names the window and the pane on screen, and the window's size and position are remembered between launches. Changes apply as you make them — there is nothing to save. Only the write to disk is debounced, and a change that alters a reading refetches it, so the rail and the menu-bar gauge never wait on the refresh timer.
 
-On Windows, open Settings from the notification-area menu. The WPF settings window uses an explicit Save button, exposes the same provider modes and placement controls, and writes launch-at-login under the current user's standard `Run` key. Clicking an overlay gauge expands its detail rows; leaving the overlay collapses them. The notification-area menu provides refresh, show/hide, provider summaries, support links, Settings, and Quit.
+On Windows, open Settings from the notification-area menu. It carries the same sidebar, search, provider panes, and placement controls, and it applies changes as you make them in the same way. Only the secret field has a Save button, because a key is written to Credential Manager once you have finished typing it, not on every keystroke. Launch at login is written under the current user's own `Run` key. The notification-area menu provides refresh, show/hide, provider summaries, support links, Settings, and Quit.
 
 The sidebar lists **General**, **About & Support**, and every provider in the catalog with its current reading, or `Off` when it is disabled. Search filters the list. Drag a provider to reorder the rail, or use the right-click menu to enable, disable, or move it. Reordering is offered only when the search field is empty.
 
@@ -147,7 +149,7 @@ The overlay is proportioned from one module, the rail width, so every measuremen
 
 Small and Large scale all of it by 0.86× and 1.18×. Usage colour runs from `#14FF97` through `#EDFF05` to amber and red at 50%, 70%, and 90%.
 
-Provider marks are drawn in code rather than bundled from vendors, so AIUsageMeter redistributes no third-party logo. To use official artwork, drop files into `Resources/ProviderMarks` and rebuild; see the README there. Anything not supplied keeps its drawn mark.
+Type is SF Pro on macOS, which the system supplies. Apple does not license it for redistribution, so the Windows build embeds Inter instead — four static weights under the SIL Open Font License, credited in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Provider marks are drawn in code rather than bundled from vendors, so AIUsageMeter redistributes no third-party logo. To use official artwork, drop files into `Resources/ProviderMarks` and rebuild; see the README there. Anything not supplied keeps its drawn mark.
 
 The overlay window is sized once per revealed session. It grows before a panel opens and shrinks only after one has closed, so no window resize runs underneath an animation.
 
@@ -200,13 +202,13 @@ Reading a discovered credential can raise a normal macOS Keychain prompt. On Win
 ```sh
 swift build -c release
 ./scripts/build-app.sh
-dotnet test WindowsTests/AIUsageMeter.Core.Tests -c Release
+pwsh ./scripts/test-windows.ps1 -Configuration Release
 dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj -c Release -r win-x64
 ```
 
 The release build is compiled with `-warnings-as-errors`, and the packaging script lints the bundle's `Info.plist` and verifies its signature with `codesign --deep --strict`.
 
-The published .NET test project covers representative parsers, preferences migration, URL policy, overlay geometry, bounded network failures, and demo labelling. The more extensive Swift fixture suite remains in the maintainer's working copy; `Package.swift` declares it only when `Tests/` is present. Windows CI is authoritative for runtime-target compilation and packaging. A macOS cross-build validates C# and WPF markup but is not a Windows runtime test.
+`test-windows.ps1` runs both published .NET suites: `AIUsageMeter.Core.Tests` covers representative parsers, preferences migration, URL policy, overlay geometry, bounded network failures, and demo labelling; `AIUsageMeter.Windows.Tests` covers the overlay's drawing, the settings view model, its hand-drawn controls, and the settings window's own bindings. It launches the test executables directly, because `dotnet test` on the .NET 10 SDK can report `Zero tests ran` instead of running them. The more extensive Swift fixture suite remains in the maintainer's working copy; `Package.swift` declares it only when `Tests/` is present. Windows CI is authoritative for runtime-target compilation and packaging. A macOS cross-build validates C# and WPF markup but is not a Windows runtime test.
 
 ## Troubleshooting
 

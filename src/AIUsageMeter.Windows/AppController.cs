@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using AIUsageMeter.Core;
+using AIUsageMeter.Windows.Overlay;
 using AIUsageMeter.Windows.Services;
 using Microsoft.Win32;
 using WinForms = System.Windows.Forms;
@@ -10,13 +11,12 @@ using DrawingIcon = System.Drawing.Icon;
 
 namespace AIUsageMeter.Windows;
 
-internal sealed class AppController : IDisposable
+internal sealed class AppController : IDisposable, ISettingsHost
 {
     private readonly Dispatcher _dispatcher;
     private readonly PreferencesStore _preferencesStore = new();
     private readonly WindowsCredentialStore _secretStore = new();
     private readonly BoundedHttpClient _httpClient = new();
-    private readonly OverlayViewModel _overlayModel = new();
     private readonly OverlayWindow _overlay;
     private readonly WinForms.NotifyIcon _tray;
     private readonly DispatcherTimer _timer;
@@ -24,17 +24,25 @@ internal sealed class AppController : IDisposable
     private AppPreferences _preferences;
     private IReadOnlyList<ProviderSnapshot> _snapshots = [];
     private CancellationTokenSource? _refreshCancellation;
+    private CancellationTokenSource? _saveCancellation;
+    private FetchInputs _fetched;
+    /// <summary>Whether the debounced save still owes a reading. Survives a flush on window close.</summary>
+    private bool _pendingRefetch;
     private SettingsWindow? _settings;
     private bool _disposed;
 
     public AppController(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher; _preferences = _preferencesStore.Load();
+        // Seeded so an Apply that lands before the first reading compares against real inputs.
+        _fetched = FetchInputs.From(_preferences);
         var service = new ProviderService(new ProviderContext(_httpClient, _secretStore, new WindowsCredentialDiscovery()));
         _coordinator = new RefreshCoordinator(service);
-        _overlay = new OverlayWindow(_overlayModel);
+        _overlay = new OverlayWindow(_preferences, new DispatcherScheduler(dispatcher), ReducedMotion());
         _overlay.PresentationChanged += (_, _) => Reposition();
-        _overlay.SizeChanged += (_, _) => Reposition();
+        _overlay.SettingsRequested += (_, _) => ShowSettings();
+        _overlay.SupportRequested += (_, _) => Open(SupportLinks.Sponsor);
+        _overlay.DashboardRequested += (_, id) => OpenDashboard(id);
         _overlay.Closing += (_, e) => { if (!_disposed) { e.Cancel = true; _overlay.Hide(); } };
         _tray = new WinForms.NotifyIcon { Icon = LoadIcon(), Text = "AIUsageMeter", Visible = true };
         _tray.DoubleClick += (_, _) => ToggleOverlay();
@@ -51,8 +59,27 @@ internal sealed class AppController : IDisposable
         _ = RefreshAsync();
     }
 
+    public IReadOnlyList<ProviderSnapshot> Snapshots => _snapshots;
+    public DateTimeOffset? LastRefresh { get; private set; }
+    public bool IsRefreshing { get; private set; }
+    public string? PersistError { get; private set; }
+    public event EventHandler? HostChanged;
+
+    public void Apply(AppPreferences preferences, bool? refetch = null)
+    {
+        var wanted = refetch ?? (FetchInputs.From(preferences) != _fetched);
+        _preferences = preferences;
+        ApplyPresentation();
+        BuildTrayMenu();
+        SchedulePersist(wanted);
+    }
+
+    public Task RefreshNowAsync() => RefreshAsync();
+
     private async Task RefreshAsync()
     {
+        IsRefreshing = true;
+        HostChanged?.Invoke(this, EventArgs.Empty);
         _refreshCancellation?.Cancel(); _refreshCancellation?.Dispose();
         _refreshCancellation = new CancellationTokenSource();
         var current = _refreshCancellation;
@@ -63,14 +90,19 @@ internal sealed class AppController : IDisposable
             await _dispatcher.InvokeAsync(() =>
             {
                 _snapshots = results;
-                var shown = Arrange(results, _preferences.Providers);
-                _overlayModel.Replace(shown);
-                Reposition(); BuildTrayMenu();
+                LastRefresh = DateTimeOffset.Now;
+                _fetched = FetchInputs.From(_preferences);
+                IsRefreshing = false;
+                _overlay.Update(Arrange(results, _preferences.Providers), NoneRefreshing);
+                BuildTrayMenu();
+                HostChanged?.Invoke(this, EventArgs.Empty);
             });
         }
         catch (OperationCanceledException) when (current.IsCancellationRequested) { }
         finally
         {
+            if (current.IsCancellationRequested)
+                _ = _dispatcher.InvokeAsync(() => { if (IsRefreshing) { IsRefreshing = false; HostChanged?.Invoke(this, EventArgs.Empty); } });
             if (ReferenceEquals(_refreshCancellation, current))
             {
                 _timer.Interval = TimeSpan.FromSeconds(_preferences.RefreshIntervalSeconds);
@@ -88,6 +120,7 @@ internal sealed class AppController : IDisposable
     private void ApplyPresentation()
     {
         _timer.Interval = TimeSpan.FromSeconds(_preferences.RefreshIntervalSeconds);
+        _overlay.Apply(_preferences);
         if (_preferences.OverlayVisible)
         {
             if (!_overlay.IsVisible) _overlay.Show();
@@ -99,12 +132,18 @@ internal sealed class AppController : IDisposable
     private void Reposition()
     {
         if (!_overlay.IsVisible) return;
-        _overlay.Dispatcher.BeginInvoke(() =>
-        {
-            _overlay.Measure(new System.Windows.Size(_overlay.Width, double.PositiveInfinity));
-            ScreenPlacementService.Place(_overlay, _preferences);
-        }, DispatcherPriority.Loaded);
+        ScreenPlacementService.Place(_overlay, _preferences);
     }
+
+    private void OpenDashboard(ProviderId id)
+    {
+        if (_snapshots.FirstOrDefault(x => x.Id == id)?.DashboardUrl is { } url) Open(url);
+    }
+
+    /// <summary>Honours the system's "show animations" setting, as macOS honours reduce motion.</summary>
+    private static bool ReducedMotion() => !System.Windows.SystemParameters.ClientAreaAnimation;
+
+    private static readonly IReadOnlySet<ProviderId> NoneRefreshing = new HashSet<ProviderId>();
 
     private void ToggleOverlay()
     {
@@ -114,21 +153,87 @@ internal sealed class AppController : IDisposable
 
     private void ShowSettings()
     {
-        if (_settings is { IsVisible: true }) { _settings.Activate(); return; }
-        _settings = new SettingsWindow(new SettingsViewModel(_preferences, _secretStore));
-        _settings.Saved += async (_, value) =>
+        if (_settings is not null) { if (_settings.WindowState == WindowState.Minimized) _settings.WindowState = WindowState.Normal; _settings.Activate(); return; }
+        var window = new SettingsWindow(new SettingsViewModel(_preferences, _secretStore, this));
+        window.Closed += (_, _) =>
         {
-            _preferences = value; await SavePreferencesAsync(); ApplyPresentation(); await RefreshAsync();
+            // Only clear the field if this is still the open window: reopening is faster than a save.
+            if (ReferenceEquals(_settings, window)) _settings = null;
+            _ = FlushPendingAsync();
         };
-        _settings.Closed += (_, _) => _settings = null;
-        _settings.Show(); _settings.Activate();
+        _settings = window;
+        window.Show(); window.Activate();
     }
 
-    private async Task SavePreferencesAsync()
+    /// <summary>
+    /// Writes the debounced save now rather than 350 ms after the window has gone, keeping the
+    /// reading that change was owed. Cancelling the debounce alone used to drop the refetch.
+    /// </summary>
+    private async Task FlushPendingAsync()
     {
-        try { await _preferencesStore.SaveAsync(_preferences); }
-        catch (IOException) { System.Windows.MessageBox.Show("Preferences could not be saved.", "AIUsageMeter", MessageBoxButton.OK, MessageBoxImage.Warning); }
-        catch (UnauthorizedAccessException) { System.Windows.MessageBox.Show("Preferences could not be saved.", "AIUsageMeter", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        var refetch = _pendingRefetch;
+        _pendingRefetch = false;
+        _saveCancellation?.Cancel();
+        await SavePreferencesAsync(fromSettings: true).ConfigureAwait(false);
+        ApplyStartupPreference();
+        if (refetch) await RefreshAsync().ConfigureAwait(false);
+        else _fetched = FetchInputs.From(_preferences);
+    }
+
+    private void SchedulePersist(bool refetch)
+    {
+        _pendingRefetch |= refetch;
+        _saveCancellation?.Cancel();
+        _saveCancellation = new CancellationTokenSource();
+        var token = _saveCancellation.Token;
+        _ = PersistAsync(refetch, token);
+    }
+
+    private async Task PersistAsync(bool refetch, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(350, token).ConfigureAwait(false);
+            _pendingRefetch = false;
+            await SavePreferencesAsync(fromSettings: true).ConfigureAwait(false);
+            ApplyStartupPreference();
+            if (refetch) await RefreshAsync().ConfigureAwait(false);
+            else _fetched = FetchInputs.From(_preferences);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    /// <summary>Applies "launch at sign-in", reporting a registry refusal as a settings notice.</summary>
+    private void ApplyStartupPreference()
+    {
+        try { StartupService.SetEnabled(_preferences.LaunchAtLogin); }
+        catch (Exception error) when (error is InvalidOperationException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            PersistError = error.Message;
+            _ = _dispatcher.InvokeAsync(() => HostChanged?.Invoke(this, EventArgs.Empty));
+        }
+    }
+
+    private async Task SavePreferencesAsync(bool fromSettings = false)
+    {
+        try
+        {
+            await _preferencesStore.SaveAsync(_preferences);
+            if (fromSettings) PersistError = null;
+        }
+        catch (IOException) { await HandlePersistFailure(fromSettings).ConfigureAwait(false); }
+        catch (UnauthorizedAccessException) { await HandlePersistFailure(fromSettings).ConfigureAwait(false); }
+    }
+
+    private async Task HandlePersistFailure(bool fromSettings)
+    {
+        if (fromSettings)
+        {
+            PersistError = "Could not save.";
+            await _dispatcher.InvokeAsync(() => HostChanged?.Invoke(this, EventArgs.Empty));
+            return;
+        }
+        System.Windows.MessageBox.Show("Preferences could not be saved.", "AIUsageMeter", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private void BuildTrayMenu()
@@ -168,10 +273,21 @@ internal sealed class AppController : IDisposable
         _tray.Text = visible.Count == 0 ? "AIUsageMeter" : $"AIUsageMeter · {averageText:F0}% average";
     }
 
+    /// <summary>
+    /// The packed icon at the size the shell asks trays for. Reading it off the exe instead would
+    /// hand back whichever single image the shell chose, and nothing at all before the exe had an
+    /// icon of its own.
+    /// </summary>
     private static DrawingIcon LoadIcon()
     {
-        try { if (Environment.ProcessPath is { } path && DrawingIcon.ExtractAssociatedIcon(path) is { } icon) return icon; }
-        catch (ArgumentException) { }
+        try
+        {
+            var resource = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/AIUsageMeter;component/Assets/AppIcon.ico"));
+            if (resource?.Stream is { } stream)
+                using (stream) return new DrawingIcon(stream, WinForms.SystemInformation.SmallIconSize);
+        }
+        catch (Exception error) when (error is ArgumentException or IOException or InvalidOperationException) { }
         return System.Drawing.SystemIcons.Application;
     }
 
@@ -194,6 +310,7 @@ internal sealed class AppController : IDisposable
         if (_disposed) return; _disposed = true;
         SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged; SystemEvents.PowerModeChanged -= PowerModeChanged;
         _timer.Stop(); _refreshCancellation?.Cancel(); _refreshCancellation?.Dispose();
+        _saveCancellation?.Cancel(); _saveCancellation?.Dispose();
         _tray.Visible = false; _tray.Dispose(); _overlay.Close(); _httpClient.Dispose();
     }
 }

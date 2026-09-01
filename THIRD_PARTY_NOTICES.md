@@ -8,6 +8,20 @@ pointer, and the app icon in `Resources/icons` — is inspired by the work of
 the design language they follow is theirs. If you fork or redistribute
 AIUsageMeter, please keep that credit intact.
 
+## Fonts
+
+The Windows build embeds the **Inter** typeface (version 4.1), copyright ©
+2016 The Inter Project Authors, licensed under the SIL Open Font License 1.1.
+The four static instances shipped — Regular, Medium, SemiBold and Bold — live in
+`src/AIUsageMeter.Windows/Assets/Fonts`, alongside the full licence text in
+`LICENSE.txt`.
+
+Inter stands in for SF Pro, which Apple does not license for redistribution.
+The macOS build uses the system font and embeds nothing.
+
+Windows itself supplies Segoe Fluent Icons, and Segoe MDL2 Assets on Windows 10.
+Neither is redistributed; both are read from the operating system.
+
 ## Code
 
 AIUsageMeter is an original implementation. Endpoint-shape research and product

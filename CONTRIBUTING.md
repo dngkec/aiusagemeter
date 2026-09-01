@@ -17,16 +17,21 @@ swift build -c release  # compiled with -warnings-as-errors
 ./scripts/make-dmg.sh   # writes dist/AIUsageMeter-<version>.dmg
 
 dotnet restore AIUsageMeter.Windows.sln
-dotnet test WindowsTests/AIUsageMeter.Core.Tests -c Release
+pwsh ./scripts/test-windows.ps1 -Configuration Release   # both suites
 dotnet build src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj -c Release -r win-x64
 pwsh ./scripts/package-windows.ps1 -Runtime win-x64
 ```
+
+`test-windows.ps1` launches the Microsoft.Testing.Platform executables directly. `dotnet test`
+wraps those same executables, but its .NET 10 SDK server mode reports `Zero tests ran` with exit
+code 5 on some machines — a red suite would arrive looking green, so prefer the script.
 
 Build products stay under `.build/` and `dist/`, both of which are ignored.
 
 The fixture-backed Swift suite is kept in the maintainer's working copy, so there
 is no `swift test` in a fresh clone. Portable Windows tests are published under
-`WindowsTests/AIUsageMeter.Core.Tests`. Send only synthetic or redacted samples.
+`WindowsTests/AIUsageMeter.Core.Tests`, and the WPF layer's under
+`WindowsTests/AIUsageMeter.Windows.Tests`. Send only synthetic or redacted samples.
 
 ## Ground rules
 

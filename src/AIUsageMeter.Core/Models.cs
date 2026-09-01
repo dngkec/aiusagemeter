@@ -41,7 +41,7 @@ public static class ProviderInfo
         ProviderId.Mistral => "M", ProviderId.XaiAPI => "xAI", ProviderId.Moonshot => "MS",
         ProviderId.Perplexity => "P", ProviderId.Windsurf => "W", ProviderId.Zai => "Z",
         ProviderId.OpenCode => "OC", ProviderId.LocalModels => "L", ProviderId.JetBrainsAI => "JB",
-        ProviderId.Warp => "W", ProviderId.Amp => "A", ProviderId.Kilo => "K",
+        ProviderId.Warp => "W", ProviderId.Amp => "A", ProviderId.Kilo => "Ki",
         ProviderId.Augment => "AU", ProviderId.Devin => "D", ProviderId.Antigravity => "AG", _ => "+"
     };
 }
@@ -102,7 +102,7 @@ public static class UsageColor
 {
     public static string For(double percent) => percent switch
     {
-        < 50 => "#14FF97", < 70 => "#C7D605", < 90 => "#FF9F0A", _ => "#FF453A"
+        < 50 => "#14FF97", < 70 => "#EDFF05", < 90 => "#FF9F0A", _ => "#FF453A"
     };
 }
 
