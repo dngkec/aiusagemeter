@@ -7,7 +7,7 @@
 ; one fewer warning to talk a user through.
 
 #ifndef AppVersion
-  #define AppVersion "1.1.0"
+  #define AppVersion "1.2.0"
 #endif
 #ifndef SourceExe
   #error SourceExe must be passed with /D
@@ -29,7 +29,7 @@
 #define RunKey "Software\Microsoft\Windows\CurrentVersion\Run"
 
 [Setup]
-; Fixed for the life of the app: this is what lets 1.1.0 upgrade 1.1.1 in place rather than
+; Fixed for the life of the app: this is what lets one release upgrade the next in place rather than
 ; installing beside it. Never regenerate it.
 AppId={{B7B4F0C2-3E5A-4D8E-9C1F-2A6D5E8B4C13}
 AppName={#AppName}
@@ -76,8 +76,26 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#ExeName}"; Tasks: desktopic
 
 [Run]
 Filename: "{app}\{#ExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; The in-app updater's own relaunch. A silent install must not start the app on its own -- that is
+; what `skipifsilent` above is for -- but an update the user asked for has to put back the tray icon
+; it just closed, so the updater passes /UPDATE and this entry answers only to that.
+Filename: "{app}\{#ExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall; Check: RelaunchRequested
 
 [Code]
+// True when the command line carries /UPDATE. Inno has no built-in test for a custom switch.
+function RelaunchRequested: Boolean;
+var
+  Index: Integer;
+begin
+  Result := False;
+  for Index := 1 to ParamCount do
+    if CompareText(ParamStr(Index), '/UPDATE') = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   // Uninstalling leaves preferences and Credential Manager entries alone — a reinstall should

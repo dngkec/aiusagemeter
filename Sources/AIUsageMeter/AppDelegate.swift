@@ -157,6 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let shown = model.visibleSnapshots
         let signature = shown.map { "\($0.id.rawValue):\($0.status.rawValue):\(Int($0.primaryPercent.rounded()))" }
             + [model.preferences.overlayVisible ? "shown" : "hidden"]
+            + [model.updateState.menuTitle ?? "no-update"]
         guard signature != menuSignature else { return }
         menuSignature = signature
         let summary = model.summary
@@ -177,6 +178,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !shown.isEmpty { menu.addItem(.separator()) }
         menu.addItem(withTitle: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r")
         menu.addItem(withTitle: model.preferences.overlayVisible ? "Hide Notch" : "Show Notch", action: #selector(toggleOverlay), keyEquivalent: "")
+        // Present only while there is something to install: the menu is not the place to report
+        // that a background check found nothing.
+        if let update = model.updateState.menuTitle {
+            menu.addItem(.separator())
+            let item = NSMenuItem(title: update, action: #selector(installUpdate), keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+            item.isEnabled = model.updateState.canInstall
+            menu.addItem(item)
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(showSettingsAction), keyEquivalent: ",")
         menu.addItem(.separator())
@@ -295,6 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openRepository() { model.openRepository() }
     @objc private func openIssues() { model.openIssues() }
     @objc private func openDesigner() { model.openDesigner() }
+    @objc private func installUpdate() { model.installUpdate() }
 
     private func showSettings() {
         if settingsWindow == nil {

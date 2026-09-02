@@ -106,6 +106,9 @@ public partial class SettingsWindow : Window
     private void Issues_Click(object sender, RoutedEventArgs e) => _model.Open(SupportLinks.Issues);
     private void Sponsor_Click(object sender, RoutedEventArgs e) => _model.Open(SupportLinks.Sponsor);
     private void Designer_Click(object sender, RoutedEventArgs e) => _model.Open(SupportLinks.Designer);
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e) => await _model.CheckForUpdatesAsync();
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e) => await _model.InstallUpdateAsync();
+    private void ReleaseNotes_Click(object sender, RoutedEventArgs e) => _model.OpenReleaseNotes();
 
     private void ProviderList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

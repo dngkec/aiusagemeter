@@ -24,10 +24,13 @@ You can expect an acknowledgement within a week.
   `~/Library/Application Support/AIUsageMeter/preferences.json` on macOS or
   `%LOCALAPPDATA%\AIUsageMeter\preferences.json` on Windows and contain
   configuration only.
-- Requests use system TLS, no browser-cookie import or HTTP cookie store,
+- Provider requests use system TLS, no browser-cookie import or HTTP cookie store,
   explicit endpoints, strict timeouts, and a 1–2 MB streaming response cap.
-  Custom HTTP is limited to localhost; other endpoints require HTTPS. Windows
-  redirects are disabled so authorization headers cannot cross hosts.
+  Custom HTTP is limited to localhost; other provider endpoints require HTTPS.
+  Provider redirects are disabled on Windows so authorization headers cannot cross
+  hosts. Update checks use allowlisted GitHub release URLs; package downloads have
+  a 400 MB cap and may follow GitHub's redirect to its asset host. The app checks
+  the published SHA-256 digest before it opens or runs a package.
 - Credentials and provider response bodies are never printed.
 - Support links are allowlisted in the platform core. Provider dashboards are
   hard-coded with their connector or, for Custom JSON, explicitly configured by

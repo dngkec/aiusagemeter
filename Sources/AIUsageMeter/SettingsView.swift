@@ -664,6 +664,46 @@ struct AboutSettings: View {
 
             Section {
                 VStack(alignment: .leading, spacing: 12) {
+                    Text("AIUsageMeter looks for a new release on launch and once a day after that. Nothing is downloaded until you ask for it, and every download is checked against the checksum published with the release before it runs.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !model.updateState.summary.isEmpty {
+                        Text(model.updateState.summary)
+                            .font(.callout)
+                            .foregroundStyle(model.updateState.stage == .failed ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.primary))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    HStack(spacing: 10) {
+                        if model.updateState.canInstall, let package = model.updateState.package {
+                            Button { model.installUpdate() } label: {
+                                Label("Update to \(package.version)", systemImage: "arrow.down.circle.fill")
+                            }
+                            .buttonStyle(SupportButtonStyle(tone: .sponsor))
+                        }
+                        Button { model.checkForUpdates() } label: {
+                            Label("Check now", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(SupportButtonStyle(tone: .neutral))
+                        .disabled(model.updateState.isBusy)
+                        if model.updateState.package?.page != nil {
+                            Button { model.openReleaseNotes() } label: {
+                                Label("Release notes", systemImage: "doc.text")
+                            }
+                            .buttonStyle(SupportButtonStyle(tone: .neutral))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Updates")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
                     Text(SupportLinks.sponsorBlurb)
                         .font(.callout)
                         .foregroundStyle(.secondary)

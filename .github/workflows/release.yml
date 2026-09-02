@@ -4,16 +4,64 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild, such as v1.2.0
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  # An installed app compares its own version against the newest tag, so a tag that disagrees with
+  # the version the binaries report would leave every install offering an update it already has.
+  # This is the one place both numbers and the tag are visible at once.
+  version:
+    name: Check the tag matches the app
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      tag: ${{ steps.read.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - id: read
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          strip() { sed 's/<[^>]*>//g' | tr -d '[:space:]'; }
+          windows=$(grep -o '<Version>[^<]*</Version>' src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj | head -1 | strip)
+          macos=$(grep CFBundleShortVersionString Resources/Info.plist | grep -o '<string>[^<]*</string>' | head -1 | strip)
+          if [ -z "$windows" ] || [ -z "$macos" ]; then
+            echo "::error::Could not read a version out of the project or the bundle."
+            exit 1
+          fi
+          echo "Windows project: $windows"
+          echo "macOS bundle:    $macos"
+          if [ "$windows" != "$macos" ]; then
+            echo "::error::The Windows project says $windows and the macOS bundle says $macos. Both ship from one tag."
+            exit 1
+          fi
+          tag="$RELEASE_TAG"
+          if [ "$tag" != "v$windows" ]; then
+            echo "::error::Tag $tag does not match the built version $windows. An install would keep offering itself this update."
+            exit 1
+          fi
+          echo "version=$windows" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   build-macos:
     name: Build macOS disk image
+    needs: version
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
       - name: Build the app bundle
         run: ./scripts/build-app.sh
@@ -35,12 +83,15 @@ jobs:
 
   build-windows:
     name: Build Windows packages
+    needs: version
     runs-on: windows-latest
     strategy:
       matrix:
         runtime: [win-x64, win-arm64]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -55,10 +106,7 @@ jobs:
 
       - name: Package self-contained application
         shell: pwsh
-        run: |
-          $ref = "${{ github.ref_name }}"
-          $version = if ($ref.StartsWith("v")) { $ref.Substring(1) } else { "1.1.0" }
-          ./scripts/package-windows.ps1 -Runtime ${{ matrix.runtime }} -Version $version
+        run: ./scripts/package-windows.ps1 -Runtime ${{ matrix.runtime }} -Version ${{ needs.version.outputs.version }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -69,7 +117,7 @@ jobs:
 
   release:
     name: Publish release assets
-    needs: [build-macos, build-windows]
+    needs: [version, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -81,6 +129,7 @@ jobs:
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
           files: |
             dist/*.dmg
             dist/*-setup.exe
@@ -94,6 +143,9 @@ jobs:
             needs Finder: right-click **AIUsageMeter.app**, choose **Open**, and confirm.
             Windows: run the installer matching your CPU. It installs for the current
             user and needs no administrator rights. Both builds are unsigned.
+
+            From 1.2.0 onwards an installed copy finds later releases on its own and
+            offers to install them from About & Support or the menu.
 
             If you find AIUsageMeter useful, you can
             [buy me a coffee](https://buymeacoffee.com/dngkec).

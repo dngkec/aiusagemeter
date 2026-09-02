@@ -1,17 +1,29 @@
 param(
     [ValidateSet("win-x64", "win-arm64")]
     [string]$Runtime = "win-x64",
-    [string]$Version = "1.1.0",
+    # Defaults to whatever the project declares. Naming a version here that the build does not
+    # carry is what makes an installed app offer itself an update it already has.
+    [string]$Version,
     [switch]$NoBuild
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+$project = Join-Path $root "src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj"
 $publish = Join-Path $root "dist/windows/$Runtime"
 
+if (-not $Version) {
+    $Version = ([xml](Get-Content $project)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+    if (-not $Version) { throw "No <Version> in $project and none passed with -Version." }
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must be three numbers, not '$Version'." }
+
 if (-not $NoBuild) {
-    dotnet publish (Join-Path $root "src/AIUsageMeter.Windows/AIUsageMeter.Windows.csproj") `
+    # -p:Version stamps the assembly with the same number the file name and the installer carry, so
+    # the running app reports the version it actually is and the update check can trust it.
+    dotnet publish $project `
         --configuration Release --runtime $Runtime --self-contained true `
+        -p:Version=$Version `
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:DebugType=None -p:DebugSymbols=false --output $publish
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }

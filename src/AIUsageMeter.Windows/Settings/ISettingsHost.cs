@@ -24,7 +24,10 @@ internal interface ISettingsHost
     DateTimeOffset? LastRefresh { get; }
     bool IsRefreshing { get; }
     string? PersistError { get; }
+    UpdateState Update { get; }
     void Apply(AppPreferences preferences, bool? refetch = null);
     Task RefreshNowAsync();
+    Task CheckForUpdatesAsync();
+    Task InstallUpdateAsync();
     event EventHandler? HostChanged;
 }

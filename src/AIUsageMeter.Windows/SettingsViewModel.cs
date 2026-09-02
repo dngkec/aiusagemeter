@@ -198,6 +198,28 @@ internal sealed class SettingsViewModel : BindableBase
         }
     }
 
+    public string UpdateSummary => _host.Update.Summary;
+    public bool HasUpdateSummary => _host.Update.Summary.Length > 0;
+    public bool UpdateIsFailure => _host.Update.Stage == UpdateStage.Failed;
+    public bool CanCheckForUpdates => !_host.Update.IsBusy;
+    /// <summary>Shown only once a version has been found, and never while it is installing.</summary>
+    public bool CanInstallUpdate => _host.Update.CanInstall;
+    public string InstallUpdateLabel => _host.Update.Package is { } package ? $"Update to {package.Version}" : "Update";
+    public bool HasReleaseNotes => _host.Update.Package?.Page is not null;
+
+    /// <summary>Both report through <see cref="UpdateSummary"/>; neither ever faults.</summary>
+    public Task CheckForUpdatesAsync() => _host.CheckForUpdatesAsync();
+    public Task InstallUpdateAsync() => _host.InstallUpdateAsync();
+
+    public void OpenReleaseNotes()
+    {
+        if (_host.Update.Package?.Page is not { } page) return;
+        // Not a SupportLinks entry, so it is checked the way a provider endpoint is.
+        try { EndpointPolicy.Validate(page.AbsoluteUri); }
+        catch (UsageMeterException) { return; }
+        Process.Start(new ProcessStartInfo(page.AbsoluteUri) { UseShellExecute = true });
+    }
+
     public void SelectGeneral() => Selection = new SettingsSelection.General();
     public void SelectAbout() => Selection = new SettingsSelection.About();
 
@@ -368,6 +390,13 @@ internal sealed class SettingsViewModel : BindableBase
         }
         Raise(nameof(IsRefreshing));
         Raise(nameof(RefreshCaption));
+        Raise(nameof(UpdateSummary));
+        Raise(nameof(HasUpdateSummary));
+        Raise(nameof(UpdateIsFailure));
+        Raise(nameof(CanCheckForUpdates));
+        Raise(nameof(CanInstallUpdate));
+        Raise(nameof(InstallUpdateLabel));
+        Raise(nameof(HasReleaseNotes));
     }
 
     internal static string? EndpointWarning(string endpoint)

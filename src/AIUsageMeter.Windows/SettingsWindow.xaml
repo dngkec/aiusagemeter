@@ -746,6 +746,25 @@
             </StackPanel>
           </DockPanel>
 
+          <TextBlock Style="{StaticResource Section}" Text="Updates"/>
+          <Border Style="{StaticResource Card}">
+            <StackPanel Style="{StaticResource StackedRow}">
+              <TextBlock Style="{StaticResource Body}" Margin="0,0,0,14" TextWrapping="Wrap"
+                         Text="AIUsageMeter looks for a new release on launch and once a day after that. Nothing is downloaded until you ask for it, and every download is checked against the checksum published with the release before it runs."/>
+              <TextBlock Text="{Binding UpdateSummary}" Style="{StaticResource Body}" Margin="0,0,0,14" TextWrapping="Wrap"
+                         Foreground="{Binding UpdateIsFailure, Converter={StaticResource NoticeBrush}}"
+                         Visibility="{Binding HasUpdateSummary, Converter={StaticResource BoolVis}}"/>
+              <WrapPanel>
+                <Button Style="{StaticResource PrimaryButton}" Content="{Binding InstallUpdateLabel}" Click="InstallUpdate_Click"
+                        Margin="0,0,8,0" Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolVis}}"/>
+                <Button Style="{StaticResource QuietButton}" Content="Check now" Click="CheckForUpdates_Click"
+                        Margin="0,0,8,0" IsEnabled="{Binding CanCheckForUpdates}"/>
+                <Button Style="{StaticResource QuietButton}" Content="Release notes" Click="ReleaseNotes_Click"
+                        Visibility="{Binding HasReleaseNotes, Converter={StaticResource BoolVis}}"/>
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+
           <TextBlock Style="{StaticResource Section}" Text="Support"/>
           <Border Style="{StaticResource Card}">
             <StackPanel Style="{StaticResource StackedRow}">

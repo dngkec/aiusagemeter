@@ -21,6 +21,7 @@ internal sealed class AppController : IDisposable, ISettingsHost
     private readonly WinForms.NotifyIcon _tray;
     private readonly DispatcherTimer _timer;
     private readonly RefreshCoordinator _coordinator;
+    private readonly UpdateService _updates;
     private AppPreferences _preferences;
     private IReadOnlyList<ProviderSnapshot> _snapshots = [];
     private CancellationTokenSource? _refreshCancellation;
@@ -48,6 +49,9 @@ internal sealed class AppController : IDisposable, ISettingsHost
         _tray.DoubleClick += (_, _) => ToggleOverlay();
         _timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher);
         _timer.Tick += async (_, _) => await RefreshAsync();
+        _updates = new UpdateService(dispatcher);
+        // A found update changes the tray menu as well as the About pane, so both are rebuilt.
+        _updates.StateChanged += (_, _) => { BuildTrayMenu(); HostChanged?.Invoke(this, EventArgs.Empty); };
         SystemEvents.DisplaySettingsChanged += DisplaySettingsChanged;
         SystemEvents.PowerModeChanged += PowerModeChanged;
     }
@@ -57,13 +61,18 @@ internal sealed class AppController : IDisposable, ISettingsHost
         ApplyPresentation();
         BuildTrayMenu();
         _ = RefreshAsync();
+        _updates.Start();
     }
 
     public IReadOnlyList<ProviderSnapshot> Snapshots => _snapshots;
     public DateTimeOffset? LastRefresh { get; private set; }
     public bool IsRefreshing { get; private set; }
     public string? PersistError { get; private set; }
+    public UpdateState Update => _updates.State;
     public event EventHandler? HostChanged;
+
+    public Task CheckForUpdatesAsync() => _updates.CheckAsync();
+    public Task InstallUpdateAsync() => _updates.InstallAsync();
 
     public void Apply(AppPreferences preferences, bool? refetch = null)
     {
@@ -260,6 +269,15 @@ internal sealed class AppController : IDisposable, ISettingsHost
         }
         menu.Items.Add("Refresh Now", null, async (_, _) => await RefreshAsync());
         menu.Items.Add(_preferences.OverlayVisible ? "Hide Overlay" : "Show Overlay", null, (_, _) => ToggleOverlay());
+        // Present only while there is something to install: the menu is not the place to report
+        // that a background check found nothing.
+        if (_updates.State.MenuTitle is { } update)
+        {
+            menu.Items.Add(new WinForms.ToolStripSeparator());
+            var item = new WinForms.ToolStripMenuItem(update) { Enabled = _updates.State.CanInstall };
+            item.Click += async (_, _) => await InstallUpdateAsync();
+            menu.Items.Add(item);
+        }
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
         menu.Items.Add(new WinForms.ToolStripSeparator());
@@ -311,6 +329,7 @@ internal sealed class AppController : IDisposable, ISettingsHost
         SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged; SystemEvents.PowerModeChanged -= PowerModeChanged;
         _timer.Stop(); _refreshCancellation?.Cancel(); _refreshCancellation?.Dispose();
         _saveCancellation?.Cancel(); _saveCancellation?.Dispose();
+        _updates.Dispose();
         _tray.Visible = false; _tray.Dispose(); _overlay.Close(); _httpClient.Dispose();
     }
 }

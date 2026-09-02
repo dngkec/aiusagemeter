@@ -119,7 +119,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var lastRefresh: Date?
     /// Hover state lives here because this toolchain ships no SwiftUI macro plugin, so the overlay has no @State.
     @Published var hoveredSupport: SupportSurface?
+    /// Mirrors `updater.state` so SwiftUI redraws; the updater itself is not observable.
+    @Published private(set) var updateState = UpdateState()
 
+    let updater = Updater()
     let store: PreferencesStore
     let secrets: SecretStore
     let coordinator: RefreshCoordinator
@@ -146,6 +149,13 @@ final class AppModel: ObservableObject {
 
     func start() {
         reloadScreens()
+        updater.onChange = { [weak self] in
+            guard let self else { return }
+            updateState = updater.state
+            // The menu bar carries the update entry too, so it is rebuilt alongside the pane.
+            onPresentationChange?()
+        }
+        updater.start()
         Task {
             var loaded = await store.load()
             if ProcessInfo.processInfo.environment["AIUSAGEMETER_DEMO"] == "1" {
@@ -506,6 +516,19 @@ final class AppModel: ObservableObject {
     private func open(_ url: URL) {
         guard SupportLinks.isSupported(url) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    func checkForUpdates() {
+        Task { await updater.check() }
+    }
+
+    func installUpdate() { updater.install() }
+
+    func openReleaseNotes() {
+        guard let page = updateState.package?.page else { return }
+        // Not a SupportLinks entry, so it is checked the way a provider endpoint is.
+        guard (try? EndpointValidator.validate(page.absoluteString)) != nil else { return }
+        NSWorkspace.shared.open(page)
     }
 
     var versionSummary: String {

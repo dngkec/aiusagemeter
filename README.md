@@ -38,6 +38,17 @@ xattr -dr com.apple.quarantine /Applications/AIUsageMeter.app
 
 There is no Dock icon on macOS. On either platform, look for AIUsageMeter in the menu-bar/status-tray area and at the right edge of your display.
 
+## Updates
+
+An installed copy checks for new releases. It asks GitHub ten seconds after launch and once a day after that, then compares the newest tag against its own version. Nothing is downloaded on its own: when a newer release exists, the status-tray menu and **About & Support** offer **Update to \<version\>**, and the download starts only when you click it.
+
+What arrives is checked before it runs. The app fetches the `SHA256SUMS-*` file published beside the package in the same release, hashes the download as it streams to disk, and refuses anything that does not match — a failed check deletes the file and installs nothing.
+
+- **Windows:** the installer runs silently, upgrades in place under the same install directory and uninstall entry, and starts the app again when it is done. It is still a per-user install, so it asks for no administrator rights.
+- **macOS:** the verified disk image is mounted read-only. The app stages and validates the new bundle beside the installed copy, replaces it with a same-volume backup, then quits. A short helper reopens the new copy and restores the backup if launch fails. If the app is installed somewhere you cannot write, or is running from the disk image itself, the verified download is revealed in Finder so you can drag it across.
+
+Both platforms keep exactly one download, under `%LOCALAPPDATA%\AIUsageMeter\updates` and `~/Library/Caches/app.aiusagemeter.AIUsageMeter/updates`. Prereleases and drafts are skipped, and a tag that is not three numbers is ignored rather than guessed at. **Check now** in **About & Support** asks straight away.
+
 ## Build from source
 
 For macOS, use macOS 14 or newer with Xcode or the Apple Command Line Tools and Swift 6:
@@ -132,7 +143,7 @@ A provider pane holds:
   <sub>General: overlay size, placement, refresh interval, and the demo-data switch.</sub>
 </p>
 
-**About & Support** carries the version, the support links, and the credits.
+**About & Support** carries the version, the update controls, the support links, and the credits.
 
 AIUsageMeter also installs a standard menu bar while it is frontmost, so Cut, Copy, Paste, Select All, and Undo work in the key fields.
 

@@ -33,11 +33,19 @@ jobs:
       - name: Package the disk image
         run: ./scripts/make-dmg.sh --no-build
 
+      - name: Capture About and Support
+        env:
+          AIUSAGEMETER_SNAPSHOT_TARGET: settings
+          AIUSAGEMETER_SNAPSHOT_PANE: about
+        run: ./scripts/capture-demo.sh dist/aiusagemeter-support.png
+
       - name: Upload the disk image
         uses: actions/upload-artifact@v4
         with:
           name: AIUsageMeter-dmg
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/aiusagemeter-support.png
           if-no-files-found: error
 
   windows:
@@ -72,6 +80,6 @@ jobs:
         with:
           name: AIUsageMeter-windows
           path: |
-            dist/*-win-x64.zip
+            dist/*-win-x64-setup.exe
             dist/SHA256SUMS-windows-win-x64.txt
           if-no-files-found: error
