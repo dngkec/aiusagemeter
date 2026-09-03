@@ -679,7 +679,7 @@ struct AboutSettings: View {
                     HStack(spacing: 10) {
                         if model.updateState.canInstall, let package = model.updateState.package {
                             Button { model.installUpdate() } label: {
-                                Label("Update to \(package.version)", systemImage: "arrow.down.circle.fill")
+                                Label("Update to \(package.version.description)", systemImage: "arrow.down.circle.fill")
                             }
                             .buttonStyle(SupportButtonStyle(tone: .sponsor))
                         }
