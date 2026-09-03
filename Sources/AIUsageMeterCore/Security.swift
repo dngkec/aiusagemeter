@@ -6,6 +6,29 @@ public protocol SecretStore: Sendable {
     func write(_ value: String?, account: String) throws
 }
 
+enum NonInteractiveKeychain {
+    static func query(service: String, account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            // Reads happen during automatic refreshes. A protected or stale
+            // item must fail closed instead of putting up a password dialog.
+            kSecUseAuthenticationUI as String: kSecUseAuthenticationUISkip,
+        ]
+    }
+
+    static func read(service: String, account: String) throws -> Data? {
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query(service: service, account: account) as CFDictionary, &result)
+        if status == errSecItemNotFound || status == errSecInteractionNotAllowed { return nil }
+        guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
+        return result as? Data
+    }
+}
+
 public struct KeychainSecretStore: SecretStore {
     public static let defaultService = "app.aiusagemeter.AIUsageMeter"
     /// The service keys were stored under before the app was renamed to
@@ -14,8 +37,8 @@ public struct KeychainSecretStore: SecretStore {
     public static let serviceBeforeRename = "app.usagemeter.UsageMeter"
 
     public let service: String
-    /// Only the app's own service carries items forward; a caller that names a
-    /// service means that one and nothing else.
+    /// Only the app's own service falls back to its old name; a caller that
+    /// names a service means that one and nothing else.
     private let priorService: String?
 
     public init(service: String = KeychainSecretStore.defaultService) {
@@ -25,11 +48,10 @@ public struct KeychainSecretStore: SecretStore {
 
     public func read(_ account: String) throws -> String? {
         if let value = try Self.read(account, service: service) { return value }
-        guard let priorService, let carried = try Self.read(account, service: priorService) else { return nil }
-        // Copy forward so later reads hit the current service directly. A
-        // failure here costs only the next read, so the value still stands.
-        try? write(carried, account: account)
-        return carried
+        guard let priorService else { return nil }
+        // Keep the rename fallback read-only. A nil current result can also mean the
+        // item was protected and deliberately skipped, not that it is absent.
+        return try Self.read(account, service: priorService)
     }
 
     public func write(_ value: String?, account: String) throws {
@@ -53,18 +75,7 @@ public struct KeychainSecretStore: SecretStore {
     }
 
     private static func read(_ account: String, service: String) throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
-        guard let data = result as? Data else { return nil }
+        guard let data = try NonInteractiveKeychain.read(service: service, account: account) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 }

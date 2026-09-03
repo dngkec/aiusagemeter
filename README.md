@@ -206,7 +206,7 @@ Demo data is deterministic and labelled `DEMO DATA`. It is never substituted for
 - Credentials and provider response bodies are never printed.
 - There are no Node or Python runtime dependencies and no third-party runtime frameworks.
 
-Reading a discovered credential can raise a normal macOS Keychain prompt. On Windows, shared CLI files are only opened read-only with bounded size and are never rewritten. A denied or unavailable credential leaves that provider in Setup Needed without affecting the others.
+Automatic refreshes never open macOS Keychain authentication UI. A shared credential that cannot be read without interaction falls back to the provider's supported credential file where one exists, then leaves that provider in Setup Needed without affecting the others. On Windows, shared CLI files are only opened read-only with bounded size and are never rewritten.
 
 ## Verifying a build
 

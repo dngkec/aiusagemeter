@@ -335,10 +335,9 @@ public enum CredentialResolver {
     }
 
     static func externalKeychain(service: String) throws -> Data {
-        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-        query[kSecAttrAccount as String] = NSUserName()
-        var output: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &output) == errSecSuccess, let data = output as? Data else { throw AIUsageMeterError.setupNeeded("Claude Code is not signed in.") }
+        guard let data = try NonInteractiveKeychain.read(service: service, account: NSUserName()) else {
+            throw AIUsageMeterError.setupNeeded("Claude Code is not signed in.")
+        }
         return data
     }
 
