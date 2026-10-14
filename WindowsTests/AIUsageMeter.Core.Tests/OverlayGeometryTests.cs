@@ -199,6 +199,54 @@ public sealed class OverlayGeometryTests
         }
     }
 
+    [TestMethod]
+    public void ClampedRailReservesAGaugeViewportAboveTheFixedSupportChrome()
+    {
+        // When the panel clamps the rail shorter than its natural height, gauges scroll in the
+        // viewport above the pinned heart — the last provider must never sit under that chrome.
+        const double item = 46 + 8 + 19;
+        const double spacing = 6;
+        const double railPadding = 18;
+        const double supportBlock = 11 + 1 + 22;
+        const int count = 28;
+
+        var natural = OverlayLayout.RailHeight(count, item, spacing, railPadding, supportBlock);
+        var clamped = natural * 0.55;
+        Assert.IsTrue(clamped < natural);
+
+        var viewport = OverlayLayout.GaugeViewportHeight(clamped, railPadding, supportBlock);
+        Assert.AreEqual(clamped - railPadding * 2 - supportBlock, viewport, 1e-9);
+        Assert.IsTrue(viewport > 0);
+        Assert.IsFalse(
+            OverlayLayout.GaugeStackFitsViewport(count, item, spacing, viewport),
+            "a long clamped rail must scroll gauges above the heart, not clip them under it");
+
+        // Scrolling to the end still leaves a full item clear of the support block.
+        var stack = OverlayLayout.GaugeStackHeight(count, item, spacing);
+        var lastBottomInContent = OverlayLayout.GaugeTop(count - 1, item, spacing, 0) + item;
+        Assert.AreEqual(stack, lastBottomInContent, 1e-9);
+        Assert.IsTrue(lastBottomInContent <= stack + 1e-9);
+        Assert.IsTrue(viewport >= item, "viewport must fit at least one full gauge above the heart");
+    }
+
+    [TestMethod]
+    public void NaturalRailViewportFitsTheFullGaugeStackWithoutScrolling()
+    {
+        const double item = 46 + 8 + 19;
+        const double spacing = 9;
+        const double railPadding = 18;
+        const double supportBlock = 11 + 1 + 22;
+        const int count = 8;
+
+        var natural = OverlayLayout.RailHeight(count, item, spacing, railPadding, supportBlock);
+        var viewport = OverlayLayout.GaugeViewportHeight(natural, railPadding, supportBlock);
+        Assert.IsTrue(OverlayLayout.GaugeStackFitsViewport(count, item, spacing, viewport));
+        Assert.AreEqual(
+            OverlayLayout.GaugeStackHeight(count, item, spacing),
+            viewport,
+            1e-9);
+    }
+
 
     private static string TemporaryPreferences(string json)
     {

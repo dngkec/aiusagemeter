@@ -36,8 +36,8 @@ public static class OverlayLayout
         => railPadding + Math.Max(0, index) * (item + spacing);
 
     /// <summary>
-    /// Whether every gauge sits entirely above the support block. A false result means the last
-    /// provider would be clipped by the heart — the bug reported when Muse was appended last.
+    /// Whether every gauge sits entirely above the support block when the rail is at its natural
+    /// height (no clamping). A false result means the height formula itself is wrong.
     /// </summary>
     public static bool GaugesClearSupport(int count, double item, double spacing, double railPadding, double supportBlock)
     {
@@ -46,6 +46,28 @@ public static class OverlayLayout
         var lastBottom = GaugeTop(count - 1, item, spacing, railPadding) + item;
         return lastBottom <= height - railPadding - supportBlock + 1e-9;
     }
+
+    /// <summary>
+    /// Height left for gauges inside a rail whose total height is clamped (screen / panel). The
+    /// support chrome (gap + hairline + heart) stays pinned to the bottom of the viewport so it
+    /// never covers the last provider — gauges scroll in this region instead.
+    /// </summary>
+    public static double GaugeViewportHeight(double railHeight, double railPadding, double supportBlock)
+        => Math.Max(0, railHeight - railPadding * 2 - supportBlock);
+
+    /// <summary>Natural height of the gauge stack alone (no padding, no support chrome).</summary>
+    public static double GaugeStackHeight(int count, double item, double spacing)
+    {
+        var rows = Math.Max(1, count);
+        return rows * item + (rows - 1) * spacing;
+    }
+
+    /// <summary>
+    /// Whether the gauge stack fits in the viewport above the fixed support chrome. When false the
+    /// gauges must scroll; the last row must still be reachable without sitting under the heart.
+    /// </summary>
+    public static bool GaugeStackFitsViewport(int count, double item, double spacing, double viewportHeight)
+        => GaugeStackHeight(count, item, spacing) <= viewportHeight + 1e-9;
 
     public static MeterRect Place(MeterRect workArea, double width, double height, VerticalPosition position, double offset)
     {

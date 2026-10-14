@@ -92,7 +92,13 @@ struct NotchLayout {
     let available: CGFloat
     let spacing: CGFloat
     let railHeight: CGFloat
-    let scrolls: Bool
+
+    /// True when the gauge stack outgrows the viewport above the fixed support chrome.
+    var gaugesNeedScroll: Bool {
+        let stack = CGFloat(count) * Metrics.item + CGFloat(count - 1) * spacing
+        let viewport = max(0, railHeight - Metrics.railPadding * 2 - Metrics.supportBlock)
+        return stack > viewport + 0.5
+    }
 
     init(count: Int, available: CGFloat) {
         let visible = max(1, count)
@@ -100,7 +106,6 @@ struct NotchLayout {
         self.available = available
         self.spacing = Metrics.itemSpacing(for: visible)
         let natural = Metrics.railHeight(count: visible, spacing: Metrics.itemSpacing(for: visible))
-        self.scrolls = natural > available
         self.railHeight = min(natural, available)
     }
 
@@ -151,14 +156,38 @@ struct ProviderRail: View {
     let layout: NotchLayout
     let reduced: Bool
 
+    /// Room for gauges above the fixed support chrome (gap + hairline + heart).
+    private var gaugeViewportHeight: CGFloat {
+        max(0, layout.railHeight - Metrics.railPadding * 2 - Metrics.supportBlock)
+    }
+
     var body: some View {
-        Group {
-            if layout.scrolls {
-                ScrollView(.vertical, showsIndicators: false) { column }
-            } else {
-                column
+        VStack(spacing: 0) {
+            Group {
+                if layout.gaugesNeedScroll {
+                    ScrollView(.vertical, showsIndicators: false) { gauges }
+                } else {
+                    gauges
+                }
             }
+            .frame(height: gaugeViewportHeight, alignment: .top)
+            .clipped()
+
+            // Fixed chrome: divider + heart. Not inside the scroll view, so the last gauge can
+            // always scroll fully into the viewport above this block.
+            Color.clear.frame(height: Metrics.supportGap)
+            Rectangle()
+                .fill(Palette.divider)
+                .frame(width: Metrics.railWidth * 0.44, height: Metrics.hairline)
+            SupportHeart(
+                hovering: model.hoveredSupport == .rail,
+                reduced: reduced,
+                onHover: { model.hoverSupport(.rail, inside: $0) },
+                action: model.openSupport
+            )
+            .frame(width: Metrics.railWidth, height: Metrics.supportButton)
         }
+        .padding(.vertical, Metrics.railPadding)
         .frame(width: Metrics.railWidth, height: layout.railHeight)
         .background {
             RailShape().fill(Palette.surface)
@@ -172,43 +201,30 @@ struct ProviderRail: View {
         .accessibilityLabel("AIUsageMeter usage rail")
     }
 
-    private var column: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: layout.spacing) {
-                if model.visibleSnapshots.isEmpty {
-                    SetupButton { model.onOpenSettings?() }
-                } else {
-                    ForEach(model.visibleSnapshots) { snapshot in
-                        GaugeItem(
-                            snapshot: snapshot,
-                            active: model.expandedProvider == snapshot.id,
-                            pinned: model.pinnedProvider == snapshot.id,
-                            refreshing: model.isRefreshing(snapshot.id),
-                            reduced: reduced,
-                            scale: Metrics.scale,
-                            action: { model.togglePin(snapshot.id) }
-                        )
-                        // Equatable: a long rail must not redraw every gauge because one of them,
-                        // or something else on the model entirely, changed.
-                        .equatable()
-                        .background(GaugeCentreReporter(id: snapshot.id))
-                        .onHover { model.hover(snapshot.id, inside: $0) }
-                    }
+    private var gauges: some View {
+        VStack(spacing: layout.spacing) {
+            if model.visibleSnapshots.isEmpty {
+                SetupButton { model.onOpenSettings?() }
+            } else {
+                ForEach(model.visibleSnapshots) { snapshot in
+                    GaugeItem(
+                        snapshot: snapshot,
+                        active: model.expandedProvider == snapshot.id,
+                        pinned: model.pinnedProvider == snapshot.id,
+                        refreshing: model.isRefreshing(snapshot.id),
+                        reduced: reduced,
+                        scale: Metrics.scale,
+                        action: { model.togglePin(snapshot.id) }
+                    )
+                    // Equatable: a long rail must not redraw every gauge because one of them,
+                    // or something else on the model entirely, changed.
+                    .equatable()
+                    .background(GaugeCentreReporter(id: snapshot.id))
+                    .onHover { model.hover(snapshot.id, inside: $0) }
                 }
             }
-            Spacer(minLength: 0).frame(height: Metrics.supportGap)
-            Rectangle()
-                .fill(Palette.divider)
-                .frame(width: Metrics.railWidth * 0.44, height: Metrics.hairline)
-            SupportHeart(
-                hovering: model.hoveredSupport == .rail,
-                reduced: reduced,
-                onHover: { model.hoverSupport(.rail, inside: $0) },
-                action: model.openSupport
-            )
-            .frame(width: Metrics.railWidth, height: Metrics.supportButton)
         }
-        .padding(.vertical, Metrics.railPadding)
+        .frame(maxWidth: .infinity)
     }
 }
 

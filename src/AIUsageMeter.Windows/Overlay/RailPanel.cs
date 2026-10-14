@@ -12,9 +12,9 @@ namespace AIUsageMeter.Windows.Overlay;
 /// support heart beneath a hairline.
 /// </summary>
 /// <remarks>
-/// A port of <c>ProviderRail</c> in <c>Sources/AIUsageMeter/NotchViews.swift</c>. A panel rather than
-/// a composed control so the rail's own background lands beneath its gauges, which is where the
-/// element's <c>OnRender</c> output goes.
+/// A port of <c>ProviderRail</c> in <c>Sources/AIUsageMeter/NotchViews.swift</c>. Gauges scroll in
+/// the viewport above the support chrome; the heart stays pinned to the bottom of the rail so the
+/// last provider is never hidden behind it.
 /// </remarks>
 internal sealed class RailPanel : Panel
 {
@@ -22,6 +22,8 @@ internal sealed class RailPanel : Panel
     private readonly Typo _typo;
     private readonly bool _reduced;
     private readonly SupportHeart _heart;
+    private readonly ScrollViewer _gaugeScroll;
+    private readonly StackPanel _gaugeStack;
     private readonly List<GaugeItem> _gauges = [];
     private SetupButton? _setup;
 
@@ -30,6 +32,18 @@ internal sealed class RailPanel : Panel
         _metrics = metrics;
         _typo = typo;
         _reduced = reduced;
+
+        _gaugeStack = new StackPanel();
+        _gaugeScroll = new ScrollViewer
+        {
+            Content = _gaugeStack,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Background = null,
+            BorderThickness = new Thickness(0),
+            Focusable = false
+        };
+        Children.Add(_gaugeScroll);
 
         _heart = new SupportHeart(metrics.SupportButton, reduced);
         _heart.Activated += (_, _) => SupportRequested?.Invoke(this, EventArgs.Empty);
@@ -63,14 +77,14 @@ internal sealed class RailPanel : Panel
     {
         if (snapshots.Count == 0)
         {
-            foreach (var gauge in _gauges) Children.Remove(gauge);
+            foreach (var gauge in _gauges) _gaugeStack.Children.Remove(gauge);
             _gauges.Clear();
 
             if (_setup is null)
             {
                 _setup = new SetupButton(_metrics, _typo);
                 _setup.Activated += (_, _) => SetupRequested?.Invoke(this, EventArgs.Empty);
-                Children.Insert(0, _setup);
+                _gaugeStack.Children.Insert(0, _setup);
             }
 
             InvalidateMeasure();
@@ -79,7 +93,7 @@ internal sealed class RailPanel : Panel
 
         if (_setup is not null)
         {
-            Children.Remove(_setup);
+            _gaugeStack.Children.Remove(_setup);
             _setup = null;
         }
 
@@ -95,23 +109,24 @@ internal sealed class RailPanel : Panel
             var gauge = Build(snapshots[index]);
             if (index < _gauges.Count)
             {
-                Children.Remove(_gauges[index]);
+                _gaugeStack.Children.Remove(_gauges[index]);
                 _gauges[index] = gauge;
-                Children.Insert(index, gauge);
+                _gaugeStack.Children.Insert(index, gauge);
             }
             else
             {
                 _gauges.Add(gauge);
-                Children.Insert(index, gauge);
+                _gaugeStack.Children.Add(gauge);
             }
         }
 
         for (var index = _gauges.Count - 1; index >= snapshots.Count; index--)
         {
-            Children.Remove(_gauges[index]);
+            _gaugeStack.Children.Remove(_gauges[index]);
             _gauges.RemoveAt(index);
         }
 
+        ApplyGaugeSpacing();
         InvalidateMeasure();
     }
 
@@ -126,12 +141,13 @@ internal sealed class RailPanel : Panel
         foreach (var gauge in _gauges) gauge.Refreshing = refreshing.Contains(gauge.Id);
     }
 
-    /// <summary>Where a gauge's centre sits, measured from the top of the rail.</summary>
+    /// <summary>Where a gauge's centre sits, measured from the top of the rail (scroll-aware).</summary>
     public double GaugeCentre(ProviderId id)
     {
         var index = _gauges.FindIndex(x => x.Id == id);
-        if (index < 0) return NaturalHeight / 2;
-        return _metrics.RailPadding + index * (_metrics.Item + Spacing) + _metrics.Gauge / 2;
+        if (index < 0) return ActualHeight > 0 ? ActualHeight / 2 : NaturalHeight / 2;
+        var contentY = index * (_metrics.Item + Spacing) + _metrics.Gauge / 2;
+        return _metrics.RailPadding + contentY - _gaugeScroll.VerticalOffset;
     }
 
     private GaugeItem Build(ProviderSnapshot snapshot)
@@ -139,36 +155,41 @@ internal sealed class RailPanel : Panel
         var gauge = new GaugeItem(snapshot, _metrics, _typo, _reduced);
         gauge.MouseLeftButtonUp += (_, _) => GaugeActivated?.Invoke(this, gauge.Id);
         gauge.Cursor = Cursors.Hand;
+        gauge.Height = _metrics.Item;
+        gauge.Width = _metrics.RailWidth;
         return gauge;
+    }
+
+    private void ApplyGaugeSpacing()
+    {
+        var spacing = Spacing;
+        for (var index = 0; index < _gaugeStack.Children.Count; index++)
+        {
+            if (_gaugeStack.Children[index] is not FrameworkElement element) continue;
+            element.Margin = index < _gaugeStack.Children.Count - 1
+                ? new Thickness(0, 0, 0, spacing)
+                : new Thickness(0);
+        }
     }
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var row = new Size(_metrics.RailWidth, _metrics.Item);
-        foreach (var gauge in _gauges) gauge.Measure(row);
-        _setup?.Measure(row);
+        var height = double.IsInfinity(availableSize.Height) || availableSize.Height <= 0
+            ? NaturalHeight
+            : availableSize.Height;
+        var viewport = OverlayLayout.GaugeViewportHeight(height, _metrics.RailPadding, _metrics.SupportBlock);
+        _gaugeScroll.Measure(new Size(_metrics.RailWidth, viewport));
         _heart.Measure(new Size(_metrics.RailWidth, _metrics.SupportButton));
-        return new Size(_metrics.RailWidth, NaturalHeight);
+        return new Size(_metrics.RailWidth, height);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var spacing = Spacing;
-        var y = _metrics.RailPadding;
+        ApplyGaugeSpacing();
+        var viewport = OverlayLayout.GaugeViewportHeight(finalSize.Height, _metrics.RailPadding, _metrics.SupportBlock);
+        _gaugeScroll.Arrange(new Rect(0, _metrics.RailPadding, finalSize.Width, viewport));
 
-        if (_setup is not null)
-        {
-            _setup.Arrange(new Rect(0, y, finalSize.Width, _metrics.Item));
-            y += _metrics.Item;
-        }
-
-        foreach (var gauge in _gauges)
-        {
-            gauge.Arrange(new Rect(0, y, finalSize.Width, _metrics.Item));
-            y += _metrics.Item + spacing;
-        }
-
-        // The heart hangs off the bottom of the rail, not off the last gauge.
+        // Heart stays pinned to the bottom of the rail viewport — never over the last gauge.
         var heartTop = finalSize.Height - _metrics.RailPadding - _metrics.SupportButton;
         _heart.Arrange(new Rect(0, heartTop, finalSize.Width, _metrics.SupportButton));
         return finalSize;

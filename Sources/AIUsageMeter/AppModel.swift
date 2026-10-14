@@ -102,7 +102,7 @@ final class AppModel: ObservableObject {
     /// Which providers the rail draws, kept apart from their readings so animating the rail's shape
     /// does not mean rebuilding an identifier array on every body pass.
     @Published private(set) var railKey: [ProviderID] = []
-    /// Measured gauge centres, in panel coordinates. The rail scrolls once the list outgrows the
+    /// Measured gauge centres, in panel coordinates. Gauges scroll once the list outgrows the
     /// screen, so a card's position cannot be derived from the gauge's index alone.
     @Published private(set) var gaugeCentres: [ProviderID: CGFloat] = [:]
     @Published var expandedProvider: ProviderID?

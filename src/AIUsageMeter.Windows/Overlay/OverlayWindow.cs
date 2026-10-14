@@ -19,7 +19,6 @@ internal sealed class OverlayWindow : Window
 {
     private readonly Canvas _surface = new();
     private readonly HoverController _hover;
-    private readonly ScrollViewer _railScroll;
     private readonly MiniTab _tab;
 
     private Metrics _metrics;
@@ -49,22 +48,15 @@ internal sealed class OverlayWindow : Window
         _hover = new HoverController(scheduler);
         _hover.Changed += (_, _) => Present();
 
+        // Gauges scroll inside the rail above a fixed heart; no outer scroll host.
         _rail = BuildRail();
-        _railScroll = new ScrollViewer
-        {
-            Content = _rail,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Background = null,
-            BorderThickness = new Thickness(0)
-        };
 
         _tab = new MiniTab(_metrics);
         _tab.Revealed += (_, _) => _hover.RevealFromMini();
 
         // Transparent areas must let clicks through to whatever is behind the overlay.
         _surface.Background = null;
-        _surface.Children.Add(_railScroll);
+        _surface.Children.Add(_rail);
         _surface.Children.Add(_tab);
         Content = _surface;
 
@@ -105,8 +97,9 @@ internal sealed class OverlayWindow : Window
             // A size change rebuilds every metric, so the rail is rebuilt with it.
             _metrics = Metrics.For(preferences.OverlaySize);
             _typo = Typo.For(preferences.OverlaySize);
+            _surface.Children.Remove(_rail);
             _rail = BuildRail();
-            _railScroll.Content = _rail;
+            _surface.Children.Insert(0, _rail);
             _rail.SetProviders(_snapshots);
             RemoveCard();
         }
@@ -158,7 +151,7 @@ internal sealed class OverlayWindow : Window
         foreach (var gauge in _rail.Gauges) Watch(gauge);
 
         var mini = _hover.IdleMini;
-        _railScroll.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
+        _rail.Visibility = mini ? Visibility.Collapsed : Visibility.Visible;
         _tab.Visibility = mini ? Visibility.Visible : Visibility.Collapsed;
 
         _rail.SetActive(_hover.Expanded);
@@ -178,12 +171,13 @@ internal sealed class OverlayWindow : Window
         }
         else
         {
-            // The rail hugs the trailing edge and centres on the panel.
+            // The rail hugs the trailing edge and centres on the panel. Height may clamp to the
+            // panel; gauges then scroll above the fixed heart inside the rail.
             var railHeight = Math.Min(_rail.NaturalHeight, height);
-            _railScroll.Width = _metrics.RailWidth;
-            _railScroll.Height = railHeight;
-            Canvas.SetLeft(_railScroll, width - _metrics.RailWidth);
-            Canvas.SetTop(_railScroll, (height - railHeight) / 2);
+            _rail.Width = _metrics.RailWidth;
+            _rail.Height = railHeight;
+            Canvas.SetLeft(_rail, width - _metrics.RailWidth);
+            Canvas.SetTop(_rail, (height - railHeight) / 2);
         }
 
         PresentationChanged?.Invoke(this, EventArgs.Empty);

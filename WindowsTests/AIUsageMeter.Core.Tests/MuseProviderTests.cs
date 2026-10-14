@@ -33,6 +33,13 @@ public sealed class MuseProviderTests
         const double supportBlock = 11 + 1 + 22;
         var enabledCount = migrated.Providers.Count; // worst case: every catalog row on the rail
         Assert.IsTrue(OverlayLayout.GaugesClearSupport(enabledCount, item, 6, railPadding, supportBlock));
+
+        // Clamped notch/rail (short display): Muse is last — gauges scroll above the fixed heart.
+        var natural = OverlayLayout.RailHeight(enabledCount, item, 6, railPadding, supportBlock);
+        var clamped = Math.Max(OverlayLayout.MinimumHeight, natural * 0.5);
+        var viewport = OverlayLayout.GaugeViewportHeight(clamped, railPadding, supportBlock);
+        Assert.IsTrue(viewport >= item);
+        Assert.IsFalse(OverlayLayout.GaugeStackFitsViewport(enabledCount, item, 6, viewport));
     }
 
     [TestMethod]
