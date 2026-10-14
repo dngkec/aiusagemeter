@@ -39,6 +39,9 @@ internal static class Marks
     /// <summary>An arrow leaving a ring, for a service that sends you elsewhere.</summary>
     public static Geometry ArrowOut { get; } = BuildArrowOut();
 
+    /// <summary>Six soft petals around a core — Meta Muse's drawn mark (not a vendor logo).</summary>
+    public static Geometry MuseBloom { get; } = BuildMuseBloom();
+
     private static Geometry BuildHeart()
     {
         var geometry = new StreamGeometry();
@@ -191,6 +194,40 @@ internal static class Marks
         var group = new GeometryGroup { FillRule = FillRule.Nonzero };
         group.Children.Add(new RectangleGeometry(new Rect(0.5 - arm, 0.5 - half, arm * 2, half * 2), half, half));
         group.Children.Add(new RectangleGeometry(new Rect(0.5 - half, 0.5 - arm, half * 2, arm * 2), half, half));
+        group.Freeze();
+        return group;
+    }
+
+    private static Geometry BuildMuseBloom()
+    {
+        const double centre = 0.5;
+        const double radius = 0.5;
+        var geometry = new StreamGeometry { FillRule = FillRule.Nonzero };
+        using (var context = geometry.Open())
+        {
+            for (var index = 0; index < 6; index++)
+            {
+                var angle = (double)index / 6 * 2 * Math.PI - Math.PI / 2;
+                var tip = new Point(centre + radius * Math.Cos(angle), centre + radius * Math.Sin(angle));
+                var left = angle - Math.PI / 6;
+                var right = angle + Math.PI / 6;
+                const double inner = radius * 0.22;
+                const double control = radius * 0.62;
+                var start = new Point(centre + inner * Math.Cos(left), centre + inner * Math.Sin(left));
+                var end = new Point(centre + inner * Math.Cos(right), centre + inner * Math.Sin(right));
+                var c1 = new Point(centre + control * Math.Cos(left + 0.18), centre + control * Math.Sin(left + 0.18));
+                var c2 = new Point(centre + control * Math.Cos(right - 0.18), centre + control * Math.Sin(right - 0.18));
+
+                context.BeginFigure(start, isFilled: true, isClosed: true);
+                context.QuadraticBezierTo(c1, tip, true, true);
+                context.QuadraticBezierTo(c2, end, true, true);
+            }
+        }
+
+        geometry.Freeze();
+        var group = new GeometryGroup { FillRule = FillRule.Nonzero };
+        group.Children.Add(geometry);
+        group.Children.Add(new EllipseGeometry(new Point(centre, centre), radius * 0.16, radius * 0.16));
         group.Freeze();
         return group;
     }

@@ -2,6 +2,12 @@ import AppKit
 import AIUsageMeterCore
 import SwiftUI
 
+/// Settings sidebar chrome shared with the Windows clearance in OverlayLayout.SidebarDragHintClearance.
+enum SidebarChrome {
+    /// Points reserved under the provider list so the drag-hint overlay never covers the last row.
+    static let dragHintClearance: CGFloat = 48
+}
+
 struct SettingsView: View {
     @ObservedObject var model: AppModel
 
@@ -49,13 +55,16 @@ struct SettingsView: View {
             }
         }
         .searchable(text: $model.settingsQuery, placement: .sidebar, prompt: "Search providers")
-        .contentMargins(.bottom, 34, for: .scrollContent)
+        // Reserve the full drag-hint height so the last catalog row (often an appended provider
+        // such as Meta Muse) is never drawn underneath the overlay.
+        .contentMargins(.bottom, SidebarChrome.dragHintClearance, for: .scrollContent)
         .overlay(alignment: .bottom) { sidebarHint }
         .navigationSplitViewColumnWidth(min: 232, ideal: 250, max: 320)
     }
 
     /// An overlay rather than a footer or a safe-area inset: both push the list's content height into the
-    /// window's minimum size, and the split view then overflows the window.
+    /// window's minimum size, and the split view then overflows the window. Height is fixed to
+    /// `SidebarChrome.dragHintClearance` so it stays in lockstep with the scroll clearance.
     private var sidebarHint: some View {
         VStack(spacing: 0) {
             Divider()
@@ -66,8 +75,9 @@ struct SettingsView: View {
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+            Spacer(minLength: 0)
         }
+        .frame(height: SidebarChrome.dragHintClearance)
         .background(.bar)
     }
 

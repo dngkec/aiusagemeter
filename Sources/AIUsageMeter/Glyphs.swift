@@ -9,6 +9,8 @@ enum ProviderGlyph {
     case spark
     case slash
     case visor
+    /// Soft six-petal bloom drawn for Meta Muse — no vendor artwork is redistributed.
+    case museBloom
     case symbol(String)
     case monogram(String)
 }
@@ -24,7 +26,7 @@ extension ProviderID {
         case .copilot: return .visor
         case .gemini: return .spark
         case .kimi: return .monogram("K")
-        case .muse: return .monogram("Mu")
+        case .muse: return .museBloom
         case .openRouter: return .symbol("arrow.triangle.branch")
         case .deepSeek: return .symbol("water.waves")
         case .mistral: return .symbol("wind")
@@ -84,6 +86,8 @@ struct GlyphView: View {
                 SlashShape().fill(color)
             case .visor:
                 VisorShape().fill(color, style: FillStyle(eoFill: true))
+            case .museBloom:
+                MuseBloomShape().fill(color)
             case .symbol(let name):
                 Image(systemName: name)
                     .font(.system(size: size * 0.86, weight: .semibold))
@@ -221,6 +225,49 @@ struct VisorShape: Shape {
         let lens = w * 0.24
         path.addEllipse(in: CGRect(x: rect.minX + w * 0.16, y: rect.minY + h * 0.38, width: lens, height: lens))
         path.addEllipse(in: CGRect(x: rect.maxX - w * 0.16 - lens, y: rect.minY + h * 0.38, width: lens, height: lens))
+        return path
+    }
+}
+
+/// Six soft petals around a detached core — Meta Muse's drawn mark (not a vendor logo).
+struct MuseBloomShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let centre = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        var path = Path()
+        for index in 0..<6 {
+            let angle = Double(index) / 6 * 2 * .pi - .pi / 2
+            let tip = CGPoint(
+                x: centre.x + radius * CoreGraphics.cos(angle),
+                y: centre.y + radius * CoreGraphics.sin(angle)
+            )
+            let left = angle - .pi / 6
+            let right = angle + .pi / 6
+            let inner = radius * 0.22
+            let control = radius * 0.62
+            let start = CGPoint(
+                x: centre.x + inner * CoreGraphics.cos(left),
+                y: centre.y + inner * CoreGraphics.sin(left)
+            )
+            let end = CGPoint(
+                x: centre.x + inner * CoreGraphics.cos(right),
+                y: centre.y + inner * CoreGraphics.sin(right)
+            )
+            let c1 = CGPoint(
+                x: centre.x + control * CoreGraphics.cos(left + 0.18),
+                y: centre.y + control * CoreGraphics.sin(left + 0.18)
+            )
+            let c2 = CGPoint(
+                x: centre.x + control * CoreGraphics.cos(right - 0.18),
+                y: centre.y + control * CoreGraphics.sin(right - 0.18)
+            )
+            path.move(to: start)
+            path.addQuadCurve(to: tip, control: c1)
+            path.addQuadCurve(to: end, control: c2)
+            path.closeSubpath()
+        }
+        let core = radius * 0.16
+        path.addEllipse(in: CGRect(x: centre.x - core, y: centre.y - core, width: core * 2, height: core * 2))
         return path
     }
 }

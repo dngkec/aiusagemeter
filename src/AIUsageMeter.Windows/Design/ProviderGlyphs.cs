@@ -53,6 +53,7 @@ internal static class ProviderGlyphs
         ProviderId.DeepSeek => Waves,
         ProviderId.Mistral => Wind,
         ProviderId.OpenRouter => Branch,
+        ProviderId.Muse => MuseBloom,
         ProviderId.Antigravity => ArrowOut,
         ProviderId.Custom => Puzzle,
 
@@ -90,6 +91,7 @@ internal static class ProviderGlyphs
     public static ProviderGlyph Branch { get; } = new ProviderGlyph.Vector([new(Marks.Branch, StrokeWidth: 0.085)]);
     public static ProviderGlyph Puzzle { get; } = new ProviderGlyph.Vector([new(Marks.Puzzle, StrokeWidth: 0.085)]);
     public static ProviderGlyph ArrowOut { get; } = new ProviderGlyph.Vector([new(Marks.ArrowOut, StrokeWidth: 0.085)]);
+    public static ProviderGlyph MuseBloom { get; } = new ProviderGlyph.Vector([new(Marks.MuseBloom)]);
 
     /// <summary>Three faces of one cube, lit by opacity rather than by three colours.</summary>
     public static ProviderGlyph Cube { get; } = new ProviderGlyph.Vector(

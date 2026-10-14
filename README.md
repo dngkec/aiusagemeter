@@ -104,7 +104,7 @@ Park the pointer away from the overlay before a notch capture. The panel is live
   <sub>The rail: one gauge per provider, six of them here.</sub>
 </p>
 
-- Hover a gauge to open its detail card. The card's pointer aims at that gauge, so it is always clear which reading is on screen. Enable more providers than fit the display and the rail scrolls; cards still open beside the gauge they belong to.
+- Hover a gauge to open its detail card. The card's pointer aims at that gauge, so it is always clear which reading is on screen. Enable more providers than fit the display and the gauges scroll above the fixed support heart on the rail; cards still open beside the gauge they belong to.
 - The card stays open while the pointer is on it, so its Dashboard and Settings links are reachable.
 - Click a gauge to pin or unpin its card. Click away or press Escape to close a pinned card. Escape belongs to Settings while that window is focused.
 - During a refresh each value arc dims and a white arc sweeps around it while the previous reading stays on screen. Percentages roll rather than jump.

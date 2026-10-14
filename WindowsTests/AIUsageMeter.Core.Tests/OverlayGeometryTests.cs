@@ -171,13 +171,82 @@ public sealed class OverlayGeometryTests
     public void NoTwoProvidersShareAMonogramOnTheRail()
     {
         // The monogram is all the reader gets for these, so two the same is two unreadable gauges.
-        // Sources/AIUsageMeter/Glyphs.swift letters Kimi K, Muse Mu, Zai Z, JetBrains JB and Kilo Ki.
-        var lettered = new[] { ProviderId.Kimi, ProviderId.Muse, ProviderId.Zai, ProviderId.JetBrainsAI, ProviderId.Kilo };
+        // Muse uses a drawn bloom on both shells; lettered marks remain Kimi K, Zai Z, JetBrains JB, Kilo Ki.
+        var lettered = new[] { ProviderId.Kimi, ProviderId.Zai, ProviderId.JetBrainsAI, ProviderId.Kilo };
         var monograms = lettered.Select(x => x.Monogram()).ToArray();
 
-        CollectionAssert.AreEqual(new[] { "K", "Mu", "Z", "JB", "Ki" }, monograms);
+        CollectionAssert.AreEqual(new[] { "K", "Z", "JB", "Ki" }, monograms);
         Assert.HasCount(lettered.Length, monograms.Distinct().ToArray());
     }
+
+    [TestMethod]
+    public void RailHeightKeepsEveryGaugeAboveTheSupportBlockIncludingALongList()
+    {
+        // Unscaled medium metrics from Design.swift / Metrics.cs.
+        const double item = 46 + 8 + 19;
+        const double railPadding = 18;
+        const double supportBlock = 11 + 1 + 22;
+
+        foreach (var count in new[] { 1, 6, 12, 28 })
+        {
+            var spacing = count switch { <= 4 => 24d, <= 6 => 16d, <= 9 => 9d, _ => 6d };
+            Assert.IsTrue(
+                OverlayLayout.GaugesClearSupport(count, item, spacing, railPadding, supportBlock),
+                $"count {count} would hide the last gauge under the support heart");
+            Assert.AreEqual(
+                count * item + (count - 1) * spacing + railPadding * 2 + supportBlock,
+                OverlayLayout.RailHeight(count, item, spacing, railPadding, supportBlock));
+        }
+    }
+
+    [TestMethod]
+    public void ClampedRailReservesAGaugeViewportAboveTheFixedSupportChrome()
+    {
+        // When the panel clamps the rail shorter than its natural height, gauges scroll in the
+        // viewport above the pinned heart — the last provider must never sit under that chrome.
+        const double item = 46 + 8 + 19;
+        const double spacing = 6;
+        const double railPadding = 18;
+        const double supportBlock = 11 + 1 + 22;
+        const int count = 28;
+
+        var natural = OverlayLayout.RailHeight(count, item, spacing, railPadding, supportBlock);
+        var clamped = natural * 0.55;
+        Assert.IsTrue(clamped < natural);
+
+        var viewport = OverlayLayout.GaugeViewportHeight(clamped, railPadding, supportBlock);
+        Assert.AreEqual(clamped - railPadding * 2 - supportBlock, viewport, 1e-9);
+        Assert.IsTrue(viewport > 0);
+        Assert.IsFalse(
+            OverlayLayout.GaugeStackFitsViewport(count, item, spacing, viewport),
+            "a long clamped rail must scroll gauges above the heart, not clip them under it");
+
+        // Scrolling to the end still leaves a full item clear of the support block.
+        var stack = OverlayLayout.GaugeStackHeight(count, item, spacing);
+        var lastBottomInContent = OverlayLayout.GaugeTop(count - 1, item, spacing, 0) + item;
+        Assert.AreEqual(stack, lastBottomInContent, 1e-9);
+        Assert.IsTrue(lastBottomInContent <= stack + 1e-9);
+        Assert.IsTrue(viewport >= item, "viewport must fit at least one full gauge above the heart");
+    }
+
+    [TestMethod]
+    public void NaturalRailViewportFitsTheFullGaugeStackWithoutScrolling()
+    {
+        const double item = 46 + 8 + 19;
+        const double spacing = 9;
+        const double railPadding = 18;
+        const double supportBlock = 11 + 1 + 22;
+        const int count = 8;
+
+        var natural = OverlayLayout.RailHeight(count, item, spacing, railPadding, supportBlock);
+        var viewport = OverlayLayout.GaugeViewportHeight(natural, railPadding, supportBlock);
+        Assert.IsTrue(OverlayLayout.GaugeStackFitsViewport(count, item, spacing, viewport));
+        Assert.AreEqual(
+            OverlayLayout.GaugeStackHeight(count, item, spacing),
+            viewport,
+            1e-9);
+    }
+
 
     private static string TemporaryPreferences(string json)
     {

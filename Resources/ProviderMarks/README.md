@@ -1,8 +1,10 @@
 # Provider marks
 
-AIUsageMeter draws its own provider marks (see `Sources/AIUsageMeter/Glyphs.swift`)
-rather than bundling vendor artwork, so the repository redistributes no
-third-party logo.
+AIUsageMeter draws its own provider marks (see `Sources/AIUsageMeter/Glyphs.swift`
+and `src/AIUsageMeter.Windows/Design/ProviderGlyphs.cs`) rather than bundling
+vendor artwork, so the repository redistributes no third-party logo. Meta Muse
+uses a drawn six-petal bloom on both shells; drop `muse.png` / `muse.pdf` here
+only if you want to override that mark locally.
 
 To use official artwork instead, drop files here and run
 `scripts/build-app.sh`. No code change is needed.

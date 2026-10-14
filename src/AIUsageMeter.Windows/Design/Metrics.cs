@@ -130,10 +130,7 @@ internal sealed class Metrics
     };
 
     public double RailHeight(int count, double spacing)
-    {
-        var rows = Math.Max(1, count);
-        return rows * Item + (rows - 1) * spacing + RailPadding * 2 + SupportBlock;
-    }
+        => OverlayLayout.RailHeight(count, Item, spacing, RailPadding, SupportBlock);
 
     /// <summary>
     /// Scales one metric and rounds it, as macOS does.
