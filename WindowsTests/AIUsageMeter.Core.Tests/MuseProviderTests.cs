@@ -20,6 +20,22 @@ public sealed class MuseProviderTests
     }
 
     [TestMethod]
+    public void MigratedMuseAtTheEndOfTheListStillHasRailAndSidebarClearance()
+    {
+        // Upgrades append Muse after Custom. The rail formula and sidebar clearance must keep it visible.
+        var migrated = PreferencesMigration.Migrate(new AppPreferences(
+            1,
+            ProviderInfo.All.Where(id => id != ProviderId.Muse).Select(id => new ProviderConfiguration(id)).ToList()));
+        Assert.AreEqual(ProviderId.Muse, migrated.Providers[^1].Id);
+
+        const double item = 46 + 8 + 19;
+        const double railPadding = 18;
+        const double supportBlock = 11 + 1 + 22;
+        var enabledCount = migrated.Providers.Count; // worst case: every catalog row on the rail
+        Assert.IsTrue(OverlayLayout.GaugesClearSupport(enabledCount, item, 6, railPadding, supportBlock));
+    }
+
+    [TestMethod]
     public void MuseSerializesAsCamelCaseMuseForCrossPlatformPreferences()
     {
         var options = new JsonSerializerOptions

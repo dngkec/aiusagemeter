@@ -15,6 +15,38 @@ public static class OverlayLayout
     /// <summary>Shortest overlay the rail is ever given, however few providers are visible.</summary>
     public const double MinimumHeight = 116;
 
+    /// <summary>
+    /// Clearance under the Settings provider list so the drag-hint chrome never covers the last row.
+    /// macOS and Windows both reserve this many points/DIPs.
+    /// </summary>
+    public const double SidebarDragHintClearance = 48;
+
+    /// <summary>
+    /// Natural height of the provider rail: N items, N−1 gaps, padding top and bottom, then the
+    /// support block (gap + hairline + heart). Both shells keep this relationship.
+    /// </summary>
+    public static double RailHeight(int count, double item, double spacing, double railPadding, double supportBlock)
+    {
+        var rows = Math.Max(1, count);
+        return rows * item + (rows - 1) * spacing + railPadding * 2 + supportBlock;
+    }
+
+    /// <summary>Top edge of the gauge at <paramref name="index"/>, measured from the top of the rail.</summary>
+    public static double GaugeTop(int index, double item, double spacing, double railPadding)
+        => railPadding + Math.Max(0, index) * (item + spacing);
+
+    /// <summary>
+    /// Whether every gauge sits entirely above the support block. A false result means the last
+    /// provider would be clipped by the heart — the bug reported when Muse was appended last.
+    /// </summary>
+    public static bool GaugesClearSupport(int count, double item, double spacing, double railPadding, double supportBlock)
+    {
+        if (count <= 0) return true;
+        var height = RailHeight(count, item, spacing, railPadding, supportBlock);
+        var lastBottom = GaugeTop(count - 1, item, spacing, railPadding) + item;
+        return lastBottom <= height - railPadding - supportBlock + 1e-9;
+    }
+
     public static MeterRect Place(MeterRect workArea, double width, double height, VerticalPosition position, double offset)
     {
         var placed = Math.Min(Math.Max(MinimumHeight, height), workArea.Height);

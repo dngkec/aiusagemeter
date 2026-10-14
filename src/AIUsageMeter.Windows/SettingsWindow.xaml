@@ -551,6 +551,8 @@
                              FontWeight="{x:Static dgn:SettingsTypo.SidebarSectionWeight}"
                              Foreground="{x:Static dgn:Palette.Tertiary}" Margin="10,6,10,6"/>
                   <ItemsPresenter/>
+                  <!-- Keep the last provider (often an appended catalog entry) clear of the drag-hint footer. -->
+                  <Border Height="{x:Static dgn:SettingsMetrics.DragHintClearance}"/>
                   <TextBlock Text="{Binding FilterEmptyMessage}" Style="{StaticResource Footnote}"
                              Margin="10,8,10,16"
                              Visibility="{Binding FilterEmpty, Converter={StaticResource BoolVis}}"/>

@@ -171,13 +171,34 @@ public sealed class OverlayGeometryTests
     public void NoTwoProvidersShareAMonogramOnTheRail()
     {
         // The monogram is all the reader gets for these, so two the same is two unreadable gauges.
-        // Sources/AIUsageMeter/Glyphs.swift letters Kimi K, Muse Mu, Zai Z, JetBrains JB and Kilo Ki.
-        var lettered = new[] { ProviderId.Kimi, ProviderId.Muse, ProviderId.Zai, ProviderId.JetBrainsAI, ProviderId.Kilo };
+        // Muse uses a drawn bloom on both shells; lettered marks remain Kimi K, Zai Z, JetBrains JB, Kilo Ki.
+        var lettered = new[] { ProviderId.Kimi, ProviderId.Zai, ProviderId.JetBrainsAI, ProviderId.Kilo };
         var monograms = lettered.Select(x => x.Monogram()).ToArray();
 
-        CollectionAssert.AreEqual(new[] { "K", "Mu", "Z", "JB", "Ki" }, monograms);
+        CollectionAssert.AreEqual(new[] { "K", "Z", "JB", "Ki" }, monograms);
         Assert.HasCount(lettered.Length, monograms.Distinct().ToArray());
     }
+
+    [TestMethod]
+    public void RailHeightKeepsEveryGaugeAboveTheSupportBlockIncludingALongList()
+    {
+        // Unscaled medium metrics from Design.swift / Metrics.cs.
+        const double item = 46 + 8 + 19;
+        const double railPadding = 18;
+        const double supportBlock = 11 + 1 + 22;
+
+        foreach (var count in new[] { 1, 6, 12, 28 })
+        {
+            var spacing = count switch { <= 4 => 24d, <= 6 => 16d, <= 9 => 9d, _ => 6d };
+            Assert.IsTrue(
+                OverlayLayout.GaugesClearSupport(count, item, spacing, railPadding, supportBlock),
+                $"count {count} would hide the last gauge under the support heart");
+            Assert.AreEqual(
+                count * item + (count - 1) * spacing + railPadding * 2 + supportBlock,
+                OverlayLayout.RailHeight(count, item, spacing, railPadding, supportBlock));
+        }
+    }
+
 
     private static string TemporaryPreferences(string json)
     {

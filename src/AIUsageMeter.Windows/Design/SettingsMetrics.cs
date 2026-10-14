@@ -1,4 +1,5 @@
 using System.Windows;
+using AIUsageMeter.Core;
 
 namespace AIUsageMeter.Windows.Design;
 
@@ -46,6 +47,12 @@ internal static class SettingsMetrics
 
     /// <summary>The gauge beside a provider's name at the top of its pane.</summary>
     public const double HeaderGauge = 46;
+
+    /// <summary>
+    /// Space kept clear under the provider list so the drag-hint footer never covers the last row.
+    /// Mirrors <see cref="AIUsageMeter.Core.OverlayLayout.SidebarDragHintClearance"/>.
+    /// </summary>
+    public const double DragHintClearance = OverlayLayout.SidebarDragHintClearance;
 
     /// <summary>
     /// Leading for wrapped prose. WPF's default is the font's own, which sets Inter at 13 far too

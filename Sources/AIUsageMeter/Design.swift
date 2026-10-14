@@ -56,6 +56,7 @@ enum Metrics {
         }
     }
 
+    /// Natural rail height. Kept in step with `OverlayLayout.RailHeight` on Windows/Core.
     static func railHeight(count: Int, spacing: CGFloat) -> CGFloat {
         let n = max(1, count)
         return CGFloat(n) * item + CGFloat(n - 1) * spacing + railPadding * 2 + supportBlock
