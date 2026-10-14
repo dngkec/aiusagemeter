@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ProviderID: String, Codable, CaseIterable, Sendable {
-    case claude, anthropicCost, codex, grok, cursor, copilot, gemini, kimi
+    case claude, anthropicCost, codex, grok, cursor, copilot, gemini, kimi, muse
     case openAIAPI, openRouter, deepSeek, mistral, xaiAPI, moonshot, perplexity, windsurf, zai
     case openCode, localModels, jetBrainsAI, warp, amp, kilo, augment, devin, antigravity, custom
 
@@ -15,6 +15,10 @@ public enum ProviderID: String, Codable, CaseIterable, Sendable {
         case .copilot: return "GitHub Copilot"
         case .gemini: return "Gemini Code Assist"
         case .kimi: return "Kimi Code"
+        // Meta Muse / Muse Code — catalog only until Meta documents a usage endpoint.
+        // Official pricing/rate limits: https://dev.meta.ai/docs/pricing-rate-limits
+        // Muse Wonder Full is subscription-only: https://dev.meta.ai/models/muse-wonder
+        case .muse: return "Meta Muse"
         case .openAIAPI: return "OpenAI API"
         case .openRouter: return "OpenRouter"
         case .deepSeek: return "DeepSeek"
@@ -47,6 +51,7 @@ public enum ProviderID: String, Codable, CaseIterable, Sendable {
         case .copilot: return "GH"
         case .gemini: return "✦"
         case .kimi: return "K"
+        case .muse: return "Mu"
         case .openRouter: return "OR"
         case .deepSeek: return "DS"
         case .mistral: return "M"

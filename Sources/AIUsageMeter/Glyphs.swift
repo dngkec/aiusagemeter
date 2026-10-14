@@ -24,6 +24,7 @@ extension ProviderID {
         case .copilot: return .visor
         case .gemini: return .spark
         case .kimi: return .monogram("K")
+        case .muse: return .monogram("Mu")
         case .openRouter: return .symbol("arrow.triangle.branch")
         case .deepSeek: return .symbol("water.waves")
         case .mistral: return .symbol("wind")

@@ -13,7 +13,7 @@ To use official artwork instead, drop files here and run
 | `<providerID>.color.png` / `.color.pdf` | Used exactly as supplied |
 
 `<providerID>` is the raw value from `ProviderID`: `claude`, `anthropicCost`,
-`codex`, `grok`, `cursor`, `copilot`, `gemini`, `kimi`, `openAIAPI`,
+`codex`, `grok`, `cursor`, `copilot`, `gemini`, `kimi`, `muse`, `openAIAPI`,
 `openRouter`, `deepSeek`, `mistral`, `xaiAPI`, `moonshot`, `perplexity`,
 `windsurf`, `zai`, `openCode`, `localModels`, `jetBrainsAI`, `warp`, `amp`,
 `kilo`, `augment`, `devin`, `antigravity`, `custom`.

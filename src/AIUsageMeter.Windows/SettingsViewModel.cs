@@ -632,6 +632,7 @@ internal static class SettingsCopy
         ProviderId.Copilot => "Finds an existing Copilot or GitHub CLI token and normalises the official quota data.",
         ProviderId.Gemini => "Uses a valid Gemini CLI access token. Reopen Gemini CLI once it expires.",
         ProviderId.Kimi => "Uses a valid Kimi Code token and never refreshes or modifies it.",
+        ProviderId.Muse => "Meta has not published a documented usage or billing API for Muse / Muse Code. Use Custom JSON or Manual budget. Track spend on Meta’s Usage dashboard.",
         ProviderId.Cursor => "Windows live integration unavailable: Cursor stores its token in SQLite and AIUsageMeter does not ship or invoke a SQLite reader.",
         ProviderId.JetBrainsAI => "Windows live integration unavailable; Manual Budget and Custom JSON remain available.",
         ProviderId.Warp => "Windows live integration unavailable; Manual Budget and Custom JSON remain available.",

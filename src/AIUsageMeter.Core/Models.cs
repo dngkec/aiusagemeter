@@ -5,7 +5,7 @@ namespace AIUsageMeter.Core;
 [JsonConverter(typeof(JsonStringEnumConverter<ProviderId>))]
 public enum ProviderId
 {
-    Claude, AnthropicCost, Codex, Grok, Cursor, Copilot, Gemini, Kimi,
+    Claude, AnthropicCost, Codex, Grok, Cursor, Copilot, Gemini, Kimi, Muse,
     OpenAIAPI, OpenRouter, DeepSeek, Mistral, XaiAPI, Moonshot, Perplexity,
     Windsurf, Zai, OpenCode, LocalModels, JetBrainsAI, Warp, Amp, Kilo,
     Augment, Devin, Antigravity, Custom
@@ -21,6 +21,10 @@ public static class ProviderInfo
         ProviderId.Codex => "Codex / ChatGPT", ProviderId.Grok => "Grok / xAI",
         ProviderId.Cursor => "Cursor", ProviderId.Copilot => "GitHub Copilot",
         ProviderId.Gemini => "Gemini Code Assist", ProviderId.Kimi => "Kimi Code",
+        // Meta Muse / Muse Code — catalog only until Meta documents a usage endpoint.
+        // Official pricing/rate limits: https://dev.meta.ai/docs/pricing-rate-limits
+        // Muse Wonder Full is subscription-only: https://dev.meta.ai/models/muse-wonder
+        ProviderId.Muse => "Meta Muse",
         ProviderId.OpenAIAPI => "OpenAI API", ProviderId.OpenRouter => "OpenRouter",
         ProviderId.DeepSeek => "DeepSeek", ProviderId.Mistral => "Mistral",
         ProviderId.XaiAPI => "xAI Platform", ProviderId.Moonshot => "Moonshot / Kimi",
@@ -37,7 +41,8 @@ public static class ProviderInfo
         ProviderId.Claude => "✳", ProviderId.AnthropicCost => "A",
         ProviderId.Codex or ProviderId.OpenAIAPI => "◎", ProviderId.Grok => "𝕏",
         ProviderId.Cursor => "C", ProviderId.Copilot => "GH", ProviderId.Gemini => "✦",
-        ProviderId.Kimi => "K", ProviderId.OpenRouter => "OR", ProviderId.DeepSeek => "DS",
+        ProviderId.Kimi => "K", ProviderId.Muse => "Mu",
+        ProviderId.OpenRouter => "OR", ProviderId.DeepSeek => "DS",
         ProviderId.Mistral => "M", ProviderId.XaiAPI => "xAI", ProviderId.Moonshot => "MS",
         ProviderId.Perplexity => "P", ProviderId.Windsurf => "W", ProviderId.Zai => "Z",
         ProviderId.OpenCode => "OC", ProviderId.LocalModels => "L", ProviderId.JetBrainsAI => "JB",

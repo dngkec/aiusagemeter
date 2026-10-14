@@ -171,11 +171,11 @@ public sealed class OverlayGeometryTests
     public void NoTwoProvidersShareAMonogramOnTheRail()
     {
         // The monogram is all the reader gets for these, so two the same is two unreadable gauges.
-        // Sources/AIUsageMeter/Glyphs.swift letters Kimi K, Zai Z, JetBrains JB and Kilo Ki.
-        var lettered = new[] { ProviderId.Kimi, ProviderId.Zai, ProviderId.JetBrainsAI, ProviderId.Kilo };
+        // Sources/AIUsageMeter/Glyphs.swift letters Kimi K, Muse Mu, Zai Z, JetBrains JB and Kilo Ki.
+        var lettered = new[] { ProviderId.Kimi, ProviderId.Muse, ProviderId.Zai, ProviderId.JetBrainsAI, ProviderId.Kilo };
         var monograms = lettered.Select(x => x.Monogram()).ToArray();
 
-        CollectionAssert.AreEqual(new[] { "K", "Z", "JB", "Ki" }, monograms);
+        CollectionAssert.AreEqual(new[] { "K", "Mu", "Z", "JB", "Ki" }, monograms);
         Assert.HasCount(lettered.Length, monograms.Distinct().ToArray());
     }
 

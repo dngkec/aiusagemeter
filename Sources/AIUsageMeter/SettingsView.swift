@@ -825,6 +825,7 @@ enum SupportCopy {
         case .copilot: return "Finds an existing Copilot or GitHub CLI token and normalises the official quota data."
         case .gemini: return "Uses a valid Gemini CLI access token. Reopen Gemini CLI once it expires."
         case .kimi: return "Uses a valid Kimi Code token and never refreshes or modifies it."
+        case .muse: return "Meta has not published a documented usage or billing API for Muse / Muse Code. Use Custom JSON or Manual budget. Track spend on Meta’s Usage dashboard."
         case .openAIAPI: return "Reads organisation API cost with an OpenAI Admin key stored in AIUsageMeter’s Keychain item."
         case .openRouter: return "Reads OpenRouter credits and the current key’s spend cap. Add an API key in Settings."
         case .deepSeek: return "Reads the documented DeepSeek balance endpoint. Credits remaining are shown against your monthly budget."
