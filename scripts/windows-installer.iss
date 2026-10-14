@@ -7,7 +7,7 @@
 ; one fewer warning to talk a user through.
 
 #ifndef AppVersion
-  #define AppVersion "1.2.3"
+  #define AppVersion "1.2.4"
 #endif
 #ifndef SourceExe
   #error SourceExe must be passed with /D
